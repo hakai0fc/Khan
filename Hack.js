@@ -1,75 +1,214 @@
+/***********************
+  HaKaiWhare
+***********************/
+
+/* Estado */
 let loadedPlugins = [];
-const splashScreen = document.createElement('splashScreen');
+let khanwareStats = {
+  questionsExploited: 0,
+  videosExploited: 0
+};
 
-document.head.appendChild(Object.assign(document.createElement("style"), {
-  innerHTML: `
-    @font-face {
-      font-family: 'MuseoSans';
-      src: url('https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf') format('truetype');
-    }
-    ::-webkit-scrollbar {
-      width: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #f1f1f1;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #888;
-      border-radius: 10px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #555;
-    }
-  `
-}));
+/* Element(s) */
+const splashScreen = document.createElement('div'); 
+const hud = document.createElement('div');
 
-document.querySelector("link[rel~='icon']").href = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png';
+/* Utils */
+const delay = ms => new Promise(r => setTimeout(r, ms));
+const playAudio = url => { try { new Audio(url).play().catch(()=>{}); } catch(e){} };
+const sendToast = (text, duration=5000, gravity='bottom') => {
+  try {
+    if (window.Toastify) {
+      Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
+    } else { console.log('TOAST:', text); }
+  } catch(e){ console.log('Toast error', e); }
+};
+const findAndClickBySelector = selector => {
+  try {
+    const el = document.querySelector(selector);
+    if (el) { el.click(); sendToast(`⭕ Pressionando ${selector}...`, 1000); }
+  } catch(e){}
+};
 
+/* EventEmitter */
 class EventEmitter {
-  constructor() {
-    this.events = {};
-  }
-
-  on(event, listener) {
-    if (typeof event === 'string') {
-      event = [event];
-    }
-    event.forEach(e => {
-      if (!this.events[e]) {
-        this.events[e] = [];
-      }
-      this.events[e].push(listener);
-    });
-  }
-
-  off(event, listener) {
-    if (typeof event === 'string') {
-      event = [event];
-    }
-    event.forEach(e => {
-      if (this.events[e]) {
-        this.events[e] = this.events[e].filter(l => l !== listener);
-      }
-    });
-  }
-
-  emit(event, ...args) {
-    if (this.events[event]) {
-      this.events[event].forEach(listener => listener(...args));
-    }
-  }
-
-  once(event, listener) {
-    if (typeof event === 'string') {
-      event = [event];
-    }
-    const onceListener = (...args) => {
-      listener(...args);
-      this.off(event, onceListener);
-    };
-    this.on(event, onceListener);
-  }
+  constructor(){ this.events = {} }
+  on(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ this.events[k] = this.events[k]||[]; this.events[k].push(e); }) }
+  off(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ if (!this.events[k]) return; this.events[k] = this.events[k].filter(fn => fn !== e); }) }
+  emit(t,...a){ (this.events[t]||[]).forEach(fn=>{ try{ fn(...a) }catch(e){console.error(e)} }) }
+  once(t,e){ const s=(...i)=>{ e(...i); this.off(t,s) }; this.on(t,s) }
 }
+const plppdo = new EventEmitter();
+
+/* Splash */
+async function showSplashScreen(){
+  splashScreen.style.cssText = `
+    position:fixed;top:0;left:0;width:100%;height:100%;
+    background-color:#000;display:flex;align-items:center;justify-content:center;
+    z-index:999999;opacity:0;transition:opacity .3s ease;
+    user-select:none;color:white;font-family:MuseoSans,system-ui,sans-serif;
+    font-size:28px;text-align:center;
+  `;
+  splashScreen.innerHTML = '<div><span style="color:white;">KHANWARE</span><span style="color:#72ff72;">.SPACE</span></div>';
+  document.body.appendChild(splashScreen);
+  await delay(20);
+  splashScreen.style.opacity = '1';
+}
+
+async function hideSplashScreen(){
+  splashScreen.style.opacity = '0';
+  await delay(500);
+  if (splashScreen.parentElement) splashScreen.remove();
+}
+
+/* HUD visual */
+function setupHUD(){
+  hud.style.cssText = `
+    position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7);
+    color: #fff; padding: 10px; border-radius: 8px; font-family: MuseoSans,sans-serif;
+    font-size: 14px; z-index: 999999; max-width: 200px; line-height: 1.3em;
+  `;
+  document.body.appendChild(hud);
+  updateHUD();
+}
+
+function updateHUD(){
+  hud.innerHTML = `
+    📝 Questões exploradas: ${khanwareStats.questionsExploited}<br>
+    🎬 Vídeos explorados: ${khanwareStats.videosExploited}
+  `;
+}
+
+/* Fetch wrapper único */
+(function installFetchWrapper(){
+  if (window.__khanware_fetch_installed) return;
+  window.__khanware_fetch_installed = true;
+  const originalFetch = window.fetch.bind(window);
+  const requestProcessors = [];
+  const responseProcessors = [];
+  window.__khanware_fetch_registerRequestProcessor = fn => requestProcessors.push(fn);
+  window.__khanware_fetch_registerResponseProcessor = fn => responseProcessors.push(fn);
+
+  window.fetch = async function(input, init){
+    try {
+      for (const p of requestProcessors){
+        const out = await p(input, init || {});
+        if (out && Array.isArray(out) && out.length>=1){ input = out[0]; init = out[1] || init; }
+      }
+      const resp = await originalFetch(input, init);
+      let replaced = null;
+      for (const p of responseProcessors){
+        const maybe = await p(resp, input, init);
+        if (maybe instanceof Response){ replaced = maybe; break; }
+      }
+      return replaced || resp;
+    } catch(e){ console.error('fetch wrapper error', e); return originalFetch(input, init); }
+  };
+  window.__khanware_fetch_debug = { requestProcessors, responseProcessors };
+})();
+
+/* Register processors */
+(function registerQuestionSpoof(){
+  const phrases = [
+    "🔥 Get good, get [Khanware](https://github.com/Niximkk/khanware/)!",
+    "🤍 Made by [@im.nix](https://e-z.bio/sounix).",
+    "☄️ By [Niximkk/khanware](https://github.com/Niximkk/khanware/).",
+    "🌟 Star the project on [GitHub](https://github.com/Niximkk/khanware/)!",
+    "🪶 Lite mode @ KhanwareMinimalPlus.js",
+  ];
+  window.__khanware_fetch_registerResponseProcessor(async (response, input, init)=>{
+    try{
+      const contentType = response.headers.get('content-type')||'';
+      if(!contentType.includes('application/json')) return null;
+      const text = await response.clone().text();
+      const obj = JSON.parse(text);
+      if(obj?.data?.assessmentItem?.item?.itemData){
+        const itemData = JSON.parse(obj.data.assessmentItem.item.itemData);
+        const firstContent = itemData?.question?.content?.[0];
+        if(typeof firstContent==='string' && firstContent===firstContent.toUpperCase()){
+          itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false };
+          itemData.question.content = phrases[Math.floor(Math.random()*phrases.length)] + `[[☃ radio 1]]`;
+          itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [ { content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false } ] } } };
+          obj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+          khanwareStats.questionsExploited++;
+          updateHUD();
+          sendToast("🔓 Questão exploitada.",1000);
+          return new Response(JSON.stringify(obj), { status: response.status, statusText: response.statusText, headers: response.headers });
+        }
+      }
+    }catch(e){ console.error('QuestionSpoof', e); }
+    return null;
+  });
+})();
+
+(function registerVideoSpoof(){
+  window.__khanware_fetch_registerRequestProcessor(async (input, init)=>{
+    try{
+      let bodyText = input instanceof Request ? await input.clone().text() : (init && init.body ? init.body : '');
+      if(bodyText && bodyText.includes('"operationName":"updateUserVideoProgress"')){
+        const bodyObj = JSON.parse(bodyText);
+        if(bodyObj.variables?.input?.durationSeconds){
+          const d = bodyObj.variables.input.durationSeconds;
+          bodyObj.variables.input.secondsWatched = d;
+          bodyObj.variables.input.lastSecondWatched = d;
+          const newBody = JSON.stringify(bodyObj);
+          if(input instanceof Request){
+            input = new Request(input, {...input, body: newBody});
+          }else{
+            init = {...init, body:newBody};
+          }
+          khanwareStats.videosExploited++;
+          updateHUD();
+          sendToast("🔓 Vídeo exploitado.",1000);
+        }
+      }
+    }catch(e){ console.error('VideoSpoof', e); }
+    return [input, init];
+  });
+})();
+
+/* AutoAnswer loop */
+function setupMain(){
+  const baseSelectors = [
+    `[data-testid="choice-icon__library-choice-icon"]`,
+    `[data-testid="exercise-check-answer"]`,
+    `[data-testid="exercise-next-question"]`,
+    `._1udzurba`,
+    `._awve9b`
+  ];
+  let khanwareDominates = true;
+  (async ()=>{
+    while(khanwareDominates){
+      for(const q of baseSelectors){
+        findAndClickBySelector(q);
+        const el = document.querySelector(q+'> div');
+        if(el && el.innerText==='Mostrar resumo'){
+          sendToast("🎉 Exercício concluído!",3000);
+          playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
+        }
+      }
+      await delay(600);
+    }
+  })();
+}
+
+/* Boot sequence */
+(async()=>{
+  try{
+    await showSplashScreen();
+    await loadCss('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css');
+    await loadScriptTag('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js','darkReaderPlugin');
+    try{ if(window.DarkReader?.setFetchMethod) window.DarkReader.setFetchMethod(window.fetch); }catch{}
+    await loadScriptTag('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.js','toastifyPlugin');
+    sendToast("🪶 Khanware Minimal Plus injetado!",3000);
+    playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+    setupHUD();
+    await delay(600);
+    hideSplashScreen();
+    setupMain();
+    console.clear();
+  }catch(e){ console.error(e); hideSplashScreen(); sendToast("❌ Erro ao iniciar Khanware",5000);}
+})();}
 
 const plppdo = new EventEmitter();
 
