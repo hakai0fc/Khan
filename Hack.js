@@ -1,275 +1,276 @@
 /***********************
-  HaKaiWhare
+  HakaiWare - Atualizado (sem HUD)
 ***********************/
 
 /* Estado */
 let loadedPlugins = [];
-let khanwareStats = {
-  questionsExploited: 0,
-  videosExploited: 0
-};
 
 /* Element(s) */
-const splashScreen = document.createElement('div'); 
-const hud = document.createElement('div');
+const splashScreen = document.createElement('div'); // usar div genérica
 
-/* Utils */
+/* Utilitários */
 const delay = ms => new Promise(r => setTimeout(r, ms));
-const playAudio = url => { try { new Audio(url).play().catch(()=>{}); } catch(e){} };
-const sendToast = (text, duration=5000, gravity='bottom') => {
+const playAudio = url => { try { const a = new Audio(url); a.play().catch(()=>{}); } catch(e){} };
+const sendToast = (text, duration=5000) => {
   try {
-    if (window.Toastify) {
-      Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
-    } else { console.log('TOAST:', text); }
-  } catch(e){ console.log('Toast error', e); }
+    if (window.Toastify) Toastify({ text, duration, gravity: "bottom", position: "center", stopOnFocus: true, style: { background: "#000" } }).showToast();
+    else console.log('[HakaiWare toast]', text);
+  } catch(e){ console.log('[HakaiWare toast error]', e); }
 };
-const findAndClickBySelector = selector => {
-  try {
-    const el = document.querySelector(selector);
-    if (el) { el.click(); sendToast(`⭕ Pressionando ${selector}...`, 1000); }
-  } catch(e){}
+const findAndClickBySelector = async (selector, opts = { scroll: true, retries: 3, retryDelay: 120 }) => {
+  for (let i = 0; i < opts.retries; i++) {
+    try {
+      const el = document.querySelector(selector);
+      if (el) {
+        if (opts.scroll && el.scrollIntoView) el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
+        el.click();
+        sendToast(`⭕ Pressionando ${selector}...`, 900);
+        return true;
+      }
+    } catch (e) { /* ignore */ }
+    await delay(opts.retryDelay);
+  }
+  return false;
 };
 
 /* EventEmitter */
 class EventEmitter {
   constructor(){ this.events = {} }
-  on(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ this.events[k] = this.events[k]||[]; this.events[k].push(e); }) }
+  on(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ (this.events[k]||(this.events[k]=[])).push(e); }) }
   off(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ if (!this.events[k]) return; this.events[k] = this.events[k].filter(fn => fn !== e); }) }
   emit(t,...a){ (this.events[t]||[]).forEach(fn=>{ try{ fn(...a) }catch(e){console.error(e)} }) }
   once(t,e){ const s=(...i)=>{ e(...i); this.off(t,s) }; this.on(t,s) }
 }
 const plppdo = new EventEmitter();
 
+/* Observe DOM changes (safe) */
+try {
+  new MutationObserver(mutations => {
+    for (const m of mutations) if (m.type === 'childList') plppdo.emit('domChanged');
+  }).observe(document.body, { childList: true, subtree: true });
+} catch(e){ console.warn('[HakaiWare] MutationObserver failed', e); }
+
+/* Safe load helpers (no eval) */
+function loadCss(url){
+  return new Promise((res,rej) => {
+    if (document.querySelector(`link[href="${url}"]`)) return res();
+    const l = document.createElement('link'); l.rel='stylesheet'; l.href=url;
+    l.onload = () => res(); l.onerror = e => rej(e);
+    document.head.appendChild(l);
+  });
+}
+function loadScriptTag(url, label){
+  return new Promise((res,rej) => {
+    if (label && loadedPlugins.includes(label)) return res();
+    if (document.querySelector(`script[src="${url}"]`)) { if (label) loadedPlugins.push(label); return res(); }
+    const s = document.createElement('script'); s.src = url; s.async = false;
+    s.onload = () => { if (label) loadedPlugins.push(label); res(); };
+    s.onerror = e => rej(new Error('Falha ao carregar ' + url + ' - ' + e));
+    document.head.appendChild(s);
+  });
+}
+
+/* safe icon/font */
+function safeSetIcon(href){
+  try {
+    let icon = document.querySelector("link[rel~='icon']");
+    if (!icon) { icon = document.createElement('link'); icon.rel = 'icon'; document.head.appendChild(icon); }
+    icon.href = href;
+  } catch(e){ /* ignore */ }
+}
+try {
+  const styleFont = document.createElement('style');
+  styleFont.innerHTML = "@font-face{font-family:'MuseoSans';src:url('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf') format('truetype');}";
+  document.head.appendChild(styleFont);
+} catch(e){}
+try {
+  const styleScroll = document.createElement('style');
+  styleScroll.innerHTML = "::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #f1f1f1; } ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #555; }";
+  document.head.appendChild(styleScroll);
+} catch(e){}
+safeSetIcon('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png');
+
 /* Splash */
 async function showSplashScreen(){
-  splashScreen.style.cssText = `
-    position:fixed;top:0;left:0;width:100%;height:100%;
-    background-color:#000;display:flex;align-items:center;justify-content:center;
-    z-index:999999;opacity:0;transition:opacity .3s ease;
-    user-select:none;color:white;font-family:MuseoSans,system-ui,sans-serif;
-    font-size:28px;text-align:center;
-  `;
-  splashScreen.innerHTML = '<div><span style="color:white;">KHANWARE</span><span style="color:#72ff72;">.SPACE</span></div>';
-  document.body.appendChild(splashScreen);
-  await delay(20);
-  splashScreen.style.opacity = '1';
+  try {
+    splashScreen.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;color:#fff;font-family:MuseoSans,system-ui;font-size:30px;z-index:999999;opacity:0;transition:opacity .3s;";
+    splashScreen.innerHTML = '<div><span style="color:white;">HAKAI</span><span style="color:#72ff72;">.WARE</span></div>';
+    document.body.appendChild(splashScreen); await delay(30); splashScreen.style.opacity = '1';
+  } catch(e){ console.warn('[HakaiWare] splash show failed', e); }
 }
+async function hideSplashScreen(){ try { splashScreen.style.opacity='0'; await delay(300); if (splashScreen.parentElement) splashScreen.remove(); } catch(e){} }
 
-async function hideSplashScreen(){
-  splashScreen.style.opacity = '0';
-  await delay(500);
-  if (splashScreen.parentElement) splashScreen.remove();
-}
-
-/* HUD visual */
-function setupHUD(){
-  hud.style.cssText = `
-    position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7);
-    color: #fff; padding: 10px; border-radius: 8px; font-family: MuseoSans,sans-serif;
-    font-size: 14px; z-index: 999999; max-width: 200px; line-height: 1.3em;
-  `;
-  document.body.appendChild(hud);
-  updateHUD();
-}
-
-function updateHUD(){
-  hud.innerHTML = `
-    📝 Questões exploradas: ${khanwareStats.questionsExploited}<br>
-    🎬 Vídeos explorados: ${khanwareStats.videosExploited}
-  `;
-}
-
-/* Fetch wrapper único */
+/* Fetch wrapper único e extensível */
 (function installFetchWrapper(){
-  if (window.__khanware_fetch_installed) return;
-  window.__khanware_fetch_installed = true;
+  if (window.__hakaiware_fetch_installed) return;
+  window.__hakaiware_fetch_installed = true;
+
   const originalFetch = window.fetch.bind(window);
   const requestProcessors = [];
   const responseProcessors = [];
-  window.__khanware_fetch_registerRequestProcessor = fn => requestProcessors.push(fn);
-  window.__khanware_fetch_registerResponseProcessor = fn => responseProcessors.push(fn);
+
+  window.__hakaiware_fetch_registerRequestProcessor = fn => { if (typeof fn === 'function') requestProcessors.push(fn); };
+  window.__hakaiware_fetch_registerResponseProcessor = fn => { if (typeof fn === 'function') responseProcessors.push(fn); };
 
   window.fetch = async function(input, init){
     try {
       for (const p of requestProcessors){
-        const out = await p(input, init || {});
-        if (out && Array.isArray(out) && out.length>=1){ input = out[0]; init = out[1] || init; }
+        try {
+          const out = await p(input, init || {});
+          if (out && Array.isArray(out) && out.length >= 1) { input = out[0]; init = out[1] || init; }
+        } catch(e){ console.error('[HakaiWare] requestProcessor error', e); }
       }
+
       const resp = await originalFetch(input, init);
-      let replaced = null;
       for (const p of responseProcessors){
-        const maybe = await p(resp, input, init);
-        if (maybe instanceof Response){ replaced = maybe; break; }
+        try {
+          const maybe = await p(resp, input, init);
+          if (maybe instanceof Response) return maybe;
+        } catch(e){ console.error('[HakaiWare] responseProcessor error', e); }
       }
-      return replaced || resp;
-    } catch(e){ console.error('fetch wrapper error', e); return originalFetch(input, init); }
+      return resp;
+    } catch(e){
+      console.error('[HakaiWare] fetch wrapper error', e);
+      return originalFetch(input, init);
+    }
   };
-  window.__khanware_fetch_debug = { requestProcessors, responseProcessors };
+
+  window.__hakaiware_fetch_debug = { requestProcessors, responseProcessors };
 })();
 
 /* Register processors */
+
+/* QuestionSpoof (response processor) */
 (function registerQuestionSpoof(){
   const phrases = [
-    "🔥 Get good, get [Khanware](https://github.com/Niximkk/khanware/)!",
-    "🤍 Made by [@im.nix](https://e-z.bio/sounix).",
-    "☄️ By [Niximkk/khanware](https://github.com/Niximkk/khanware/).",
-    "🌟 Star the project on [GitHub](https://github.com/Niximkk/khanware/)!",
-    "🪶 Lite mode @ KhanwareMinimalPlus.js",
+    "🔥 Get good, get [HakaiWare](https://github.com/)!",
+    "🤍 Made by [HakaiWare].",
+    "☄️ By [HakaiWare].",
+    "🌟 Star the project on [GitHub]!"
   ];
-  window.__khanware_fetch_registerResponseProcessor(async (response, input, init)=>{
-    try{
-      const contentType = response.headers.get('content-type')||'';
-      if(!contentType.includes('application/json')) return null;
+
+  window.__hakaiware_fetch_registerResponseProcessor(async (response, input, init) => {
+    try {
+      const ct = response.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) return null;
       const text = await response.clone().text();
-      const obj = JSON.parse(text);
-      if(obj?.data?.assessmentItem?.item?.itemData){
-        const itemData = JSON.parse(obj.data.assessmentItem.item.itemData);
-        const firstContent = itemData?.question?.content?.[0];
-        if(typeof firstContent==='string' && firstContent===firstContent.toUpperCase()){
-          itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false };
-          itemData.question.content = phrases[Math.floor(Math.random()*phrases.length)] + `[[☃ radio 1]]`;
-          itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [ { content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false } ] } } };
-          obj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
-          khanwareStats.questionsExploited++;
-          updateHUD();
-          sendToast("🔓 Questão exploitada.",1000);
-          return new Response(JSON.stringify(obj), { status: response.status, statusText: response.statusText, headers: response.headers });
-        }
+      let obj; try { obj = JSON.parse(text); } catch(e) { return null; }
+      if (obj?.data?.assessmentItem?.item?.itemData) {
+        try {
+          const itemData = JSON.parse(obj.data.assessmentItem.item.itemData);
+          const first = itemData?.question?.content?.[0];
+          if (typeof first === 'string' && first === first.toUpperCase()) {
+            itemData.answerArea = { calculator:false, chi2Table:false, periodicTable:false, tTable:false, zTable:false };
+            itemData.question.content = phrases[Math.floor(Math.random()*phrases.length)] + `[[☃ radio 1]]`;
+            itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [ { content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false } ] } } };
+            obj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+            sendToast("🔓 Questão exploitada.", 1000);
+            return new Response(JSON.stringify(obj), { status: response.status, statusText: response.statusText, headers: response.headers });
+          }
+        } catch(e){ /* parse fail */ }
       }
-    }catch(e){ console.error('QuestionSpoof', e); }
+    } catch(e){ console.error('[HakaiWare] QuestionSpoof', e); }
     return null;
   });
 })();
 
+/* VideoSpoof (request processor) */
 (function registerVideoSpoof(){
-  window.__khanware_fetch_registerRequestProcessor(async (input, init)=>{
-    try{
-      let bodyText = input instanceof Request ? await input.clone().text() : (init && init.body ? init.body : '');
-      if(bodyText && bodyText.includes('"operationName":"updateUserVideoProgress"')){
-        const bodyObj = JSON.parse(bodyText);
-        if(bodyObj.variables?.input?.durationSeconds){
-          const d = bodyObj.variables.input.durationSeconds;
-          bodyObj.variables.input.secondsWatched = d;
-          bodyObj.variables.input.lastSecondWatched = d;
-          const newBody = JSON.stringify(bodyObj);
-          if(input instanceof Request){
-            input = new Request(input, {...input, body: newBody});
-          }else{
-            init = {...init, body:newBody};
+  window.__hakaiware_fetch_registerRequestProcessor(async (input, init) => {
+    try {
+      const bodyText = input instanceof Request ? await input.clone().text() : (init && init.body ? init.body : '');
+      if (bodyText && bodyText.includes('"operationName":"updateUserVideoProgress"')) {
+        try {
+          const bodyObj = JSON.parse(bodyText);
+          if (bodyObj.variables?.input?.durationSeconds) {
+            const d = bodyObj.variables.input.durationSeconds;
+            bodyObj.variables.input.secondsWatched = d;
+            bodyObj.variables.input.lastSecondWatched = d;
+            const newBody = JSON.stringify(bodyObj);
+            if (input instanceof Request) input = new Request(input, { body: newBody, method: input.method, headers: input.headers, mode: input.mode, credentials: input.credentials, cache: input.cache, redirect: input.redirect, referrer: input.referrer });
+            else init = Object.assign({}, init, { body: newBody });
+            sendToast("🔓 Vídeo exploitado.", 1000);
           }
-          khanwareStats.videosExploited++;
-          updateHUD();
-          sendToast("🔓 Vídeo exploitado.",1000);
-        }
+        } catch(e){ console.warn('[HakaiWare] videoSpoof parse fail', e); }
       }
-    }catch(e){ console.error('VideoSpoof', e); }
+    } catch(e){ console.error('[HakaiWare] videoSpoof error', e); }
     return [input, init];
   });
 })();
 
-/* AutoAnswer loop */
-function setupMain(){
-  const baseSelectors = [
-    `[data-testid="choice-icon__library-choice-icon"]`,
-    `[data-testid="exercise-check-answer"]`,
-    `[data-testid="exercise-next-question"]`,
-    `._1udzurba`,
-    `._awve9b`
-  ];
-  let khanwareDominates = true;
-  (async ()=>{
-    while(khanwareDominates){
-      for(const q of baseSelectors){
-        findAndClickBySelector(q);
-        const el = document.querySelector(q+'> div');
-        if(el && el.innerText==='Mostrar resumo'){
-          sendToast("🎉 Exercício concluído!",3000);
-          playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
-        }
+/* MinuteFarm (request + response processors) */
+(function registerMinuteFarm(){
+  window.__hakaiware_fetch_registerRequestProcessor(async (input, init) => {
+    try {
+      const url = input && input.url ? input.url : (typeof input === 'string' ? input : '');
+      const body = input instanceof Request ? await input.clone().text() : (init && init.body ? init.body : '');
+      if (body && url.includes("mark_conversions") && body.includes("termination_event")) {
+        sendToast("🚫 Limitador de tempo bloqueado.", 1000);
+        init = Object.assign({}, init, { __hakaiware_blocked_mark_conversions: true });
       }
-      await delay(600);
-    }
+    } catch(e){ console.error('[HakaiWare] minuteFarm req error', e); }
+    return [input, init];
+  });
+
+  window.__hakaiware_fetch_registerResponseProcessor(async (response, input, init) => {
+    try {
+      if (init && init.__hakaiware_blocked_mark_conversions) {
+        return new Response('', { status: 204, statusText: 'No Content' });
+      }
+    } catch(e){ console.error('[HakaiWare] minuteFarm res error', e); }
+    return null;
+  });
+})();
+
+/* AutoAnswer loop (delay 785ms) */
+function setupMain(){
+  (function autoAnswer(){
+    const baseSelectors = [
+      `[data-testid="choice-icon__library-choice-icon"]`,
+      `[data-testid="exercise-check-answer"]`,
+      `[data-testid="exercise-next-question"]`,
+      `._1udzurba`,
+      `._awve9b`
+    ];
+    let active = true;
+    (async () => {
+      while (active) {
+        try {
+          for (const s of baseSelectors) {
+            await findAndClickBySelector(s, { retries: 2, retryDelay: 120 });
+            const el = document.querySelector(s + '> div');
+            if (el && el.innerText === 'Mostrar resumo') {
+              sendToast("🎉 Exercício concluído!", 2500);
+              playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav');
+            }
+          }
+        } catch(e){ console.error('[HakaiWare] autoAnswer loop error', e); }
+        await delay(785);
+      }
+    })();
   })();
 }
 
 /* Boot sequence */
-(async()=>{
-  try{
+(async () => {
+  try {
     await showSplashScreen();
-    await loadCss('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css');
-    await loadScriptTag('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js','darkReaderPlugin');
-    try{ if(window.DarkReader?.setFetchMethod) window.DarkReader.setFetchMethod(window.fetch); }catch{}
-    await loadScriptTag('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.js','toastifyPlugin');
-    sendToast("🪶 Khanware Minimal Plus injetado!",3000);
+    await loadCss('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css').catch(()=>{});
+    await loadScriptTag('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin').catch(()=>{});
+    try { if (window.DarkReader?.setFetchMethod) window.DarkReader.setFetchMethod(window.fetch); } catch(e){}
+    await loadScriptTag('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.js', 'toastifyPlugin').catch(()=>{});
+    sendToast('🪶 HakaiWare injetado com sucesso!', 2500);
     playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
-    setupHUD();
-    await delay(600);
+    await delay(500);
     hideSplashScreen();
     setupMain();
     console.clear();
-  }catch(e){ console.error(e); hideSplashScreen(); sendToast("❌ Erro ao iniciar Khanware",5000);}
-})();}
-
-const plppdo = new EventEmitter();
-
-new MutationObserver(mutationsList => {
-  for (let mutation of mutationsList) {
-    if (mutation.type === 'childList') {
-      plppdo.emit('domChanged');
-    }
+  } catch(e){
+    console.error('[HakaiWare] boot error', e);
+    hideSplashScreen();
+    sendToast('❌ Erro ao iniciar HakaiWare: veja console.', 5000);
   }
-}).observe(document.body, { childList: true, subtree: true });
-
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const playAudio = url => {
-  const audio = new Audio(url);
-  audio.play();
-};
-
-const findAndClickBySelector = selector => {
-  const element = document.querySelector(selector);
-  if (element) {
-    element.click();
-    sendToast(`⭕ Pressionando ${selector}...`, 1000);
-  }
-};
-
-function sendToast(text, duration = 5000, gravity = 'bottom') {
-  Toastify({
-    text: text,
-    duration: duration,
-    gravity: gravity,
-    position: "center",
-    stopOnFocus: true,
-    style: {
-      background: "#000000"
-    }
-  }).showToast();
-}
-
-async function showSplashScreen() {
-  splashScreen.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    opacity: 0;
-    transition: opacity 0.5s ease;
-    user-select: none;
-    color: white;
-    font-family: MuseoSans, sans-serif;
-    font-size: 30px;
-    text-align: center;
-  `;
-  splashScreen.innerHTML = '<span style="color:white;">KHANWARE</span><span style="color:#72ff72;">.SPACE</span>';
-  document.body.appendChild(splashScreen);
-  setTimeout(() => splashScreen.style.opacity = '1', 10);
+})(););
 }
 
 async function hideSplashScreen() {
