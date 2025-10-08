@@ -1,75 +1,148 @@
 /***********************
-  Hakaiware - Corrigido
+  Hakaiware 
 ***********************/
 
-/* Estado */
-let loadedPlugins = [];
+(() => {
+  if (window.__hakaiware_sanitized_loaded) { console.info('Hakaiware already loaded'); return; }
+  window.__hakaiware_sanitized_loaded = true;
 
-/* Element(s) */
-const splashScreen = document.createElement('div'); 
+  /* Estado */
+  let loadedPlugins = [];
 
-/* Utils */
-const delay = ms => new Promise(r => setTimeout(r, ms));
-const playAudio = url => { try { const a = new Audio(url); a.play().catch(()=>{}); } catch(e){} };
-const sendToast = (text, duration=5000, gravity='bottom') => {
+  /* Element(s) */
+  const splashScreen = document.createElement('div');
+
+  /* Utils */
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+  const playAudio = url => { try { const a = new Audio(url); a.play().catch(()=>{}); } catch(e){} };
+  const sendToast = (text, duration=4000, gravity='bottom') => {
+    try {
+      if (window.Toastify) {
+        Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
+      } else {
+        console.info('[Toast fallback]', text);
+      }
+    } catch(e){ console.error('Toast error', e); }
+  };
+
+  /* Simple EventEmitter */
+  class EventEmitter {
+    constructor(){ this.events = {}; }
+    on(name, fn){ if (typeof name === 'string') name = [name]; name.forEach(n => { this.events[n] = this.events[n] || []; this.events[n].push(fn); }); }
+    off(name, fn){ if (typeof name === 'string') name = [name]; name.forEach(n => { if (!this.events[n]) return; this.events[n] = this.events[n].filter(f => f !== fn); }); }
+    emit(name, ...args){ (this.events[name] || []).forEach(f => { try { f(...args); } catch(e){ console.error(e); } }); }
+    once(name, fn){ const s = (...a) => { fn(...a); this.off(name, s); }; this.on(name, s); }
+  }
+  const plppdo = new EventEmitter();
+
+  /* DOM observer (safe) */
   try {
-    if (window.Toastify) {
-      Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
-    } else {
-      console.log('TOAST:', text);
-    }
-  } catch(e){ console.log('Toast error', e); }
-};
-const findAndClickBySelector = selector => {
-  try {
-    const el = document.querySelector(selector);
-    if (el) {
-      el.click();
-      sendToast(`⭕ Pressionando ${selector}...`, 1000);
-    }
-  } catch(e){}
-};
+    new MutationObserver((mutationsList) => {
+      for (const mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged');
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch(e){ console.warn('MutationObserver not available', e); }
 
-/* EventEmitter */
-class EventEmitter {
-  constructor(){ this.events = {} }
-  on(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ this.events[k] = this.events[k]||[]; this.events[k].push(e); }) }
-  off(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ if (!this.events[k]) return; this.events[k] = this.events[k].filter(fn => fn !== e); }) }
-  emit(t,...a){ (this.events[t]||[]).forEach(fn=>{ try{ fn(...a) }catch(e){console.error(e)} }) }
-  once(t,e){ const s=(...i)=>{ e(...i); this.off(t,s) }; this.on(t,s) }
-}
-const plppdo = new EventEmitter();
+  /* Loaders */
+  function loadCss(url){
+    return new Promise((resolve, reject) => {
+      try {
+        if (document.querySelector(`link[href="${url}"]`)) return resolve();
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = url;
+        link.onload = () => resolve();
+        link.onerror = (err) => reject(err);
+        document.head.appendChild(link);
+      } catch(e){ reject(e); }
+    });
+  }
+  function loadScriptTag(url, label){
+    return new Promise((resolve, reject) => {
+      try {
+        if (label && loadedPlugins.includes(label)) return resolve();
+        if (document.querySelector(`script[src="${url}"]`)) {
+          if (label) loadedPlugins.push(label);
+          return resolve();
+        }
+        const s = document.createElement('script');
+        s.src = url;
+        s.async = false;
+        s.onload = () => { if (label) loadedPlugins.push(label); resolve(); };
+        s.onerror = (err) => reject(new Error('Falha ao carregar ' + url + ' - ' + err));
+        document.head.appendChild(s);
+      } catch(e){ reject(e); }
+    });
+  }
 
-/* Observe DOM changes (safe) */
-try {
-  new MutationObserver((mutationsList) => {
-    for (let mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged');
-  }).observe(document.body, { childList: true, subtree: true });
-} catch(e){ console.error('MutationObserver error', e); }
+  /* Safety helpers */
+  const safeSetIcon = (href) => {
+    try {
+      let icon = document.querySelector("link[rel~='icon']");
+      if (!icon) { icon = document.createElement('link'); icon.rel = 'icon'; document.head.appendChild(icon); }
+      icon.href = href;
+    } catch(e){ console.warn('icone not set', e); }
+  };
 
-/* Load CSS / Script via tag (mais confiável que eval) */
-function loadCss(url){
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`link[href="${url}"]`)) return resolve();
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = url;
-    link.onload = () => resolve();
-    link.onerror = (err) => reject(err);
-    document.head.appendChild(link);
-  });
-}
-function loadScriptTag(url, label){
-  return new Promise((resolve, reject) => {
-    if (label && loadedPlugins.includes(label)) return resolve();
-    // evitar duplicata
-    if (document.querySelector(`script[src="${url}"]`)) {
-      if (label) loadedPlugins.push(label);
-      return resolve();
+  /* Splash */
+  async function showSplashScreen(){
+    try {
+      splashScreen.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background-color:#000;display:flex;align-items:center;justify-content:center;z-index:999999;opacity:0;transition:opacity .25s ease;user-select:none;color:white;font-family:system-ui,Arial,sans-serif;font-size:28px;text-align:center;";
+      splashScreen.innerHTML = '<div><span style="color:white;">HAKAIWARE</span><span style="color:#72ff72;">.SPACE</span></div>';
+      document.body.appendChild(splashScreen);
+      await delay(20);
+      splashScreen.style.opacity = '1';
+    } catch(e){ console.error(e); }
+  }
+  async function hideSplashScreen(){
+    try {
+      splashScreen.style.opacity = '0';
+      await delay(300);
+      if (splashScreen.parentElement) splashScreen.remove();
+    } catch(e){}
+  }
+
+  /* Main (sanitized) */
+  function setupMain(){
+    // Nenhuma rotina de exploração aqui — apenas um exemplo neutro
+    sendToast('Hakaiware (sanitized) pronto.', 2500);
+    console.info('Hakaiware (sanitized) iniciado. Nenhuma rotina invasiva está ativa.');
+  }
+
+  /* Boot sequence */
+  (async () => {
+    try {
+      await showSplashScreen();
+
+      // carregar Toastify (opcional)
+      try {
+        await loadCss('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css');
+      } catch(e){ console.warn('toastify css fail', e); }
+      try {
+        await loadScriptTag('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.js', 'toastifyPlugin');
+      } catch(e){ console.warn('toastify js fail', e); }
+
+      // set icon (opcional)
+      safeSetIcon('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png');
+
+      // ready
+      sendToast('🪶 Hakaiware (sanitized) injetado com sucesso!', 2200);
+      playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+
+      await delay(500);
+      hideSplashScreen();
+      setupMain();
+
+      // expose for debugging
+      window.__hakaiware = { loadedPlugins };
+
+    } catch(err){
+      console.error('Boot error', err);
+      hideSplashScreen();
+      sendToast('❌ Erro ao iniciar Hakaiware (veja console)', 5000);
     }
-    const s = document.createElement('script');
-    s.src = url;
-    s.async = false;
+  })();
+
+})();    s.async = false;
     s.onload = () => { if (label) loadedPlugins.push(label); resolve(); };
     s.onerror = (err) => reject(new Error('Falha ao carregar ' + url + ' - ' + err));
     document.head.appendChild(s);
