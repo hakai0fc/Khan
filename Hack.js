@@ -1,3 +1,4 @@
+
 let loadedPlugins = [];
 
 /* Element(s?) */
@@ -18,7 +19,7 @@ new MutationObserver((mutationsList) => { for (let mutation of mutationsList) if
 /* Misc Functions */
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const playAudio = url => { try { const audio = new Audio(url); audio.play(); } catch(e){} };
-const findAndClickBySelector = selector => { const element = document.querySelector(selector); if (element) { element.click(); sendToast(`⭕ Pressionando ${selector}...`, 1000); } };
+const findAndClickBySelector = selector => { const element = document.querySelector(selector); if (element) { element.click(); sendToast(`â­• Pressionando ${selector}...`, 1000); } };
 
 function sendToast(text, duration=5000, gravity='bottom') { 
     if (typeof Toastify !== 'undefined') {
@@ -48,28 +49,146 @@ function setupMain(){
     /* QuestionSpoof */
     (function () {
         const phrases = [ 
-            "🔥 Get good, get [HAKAI Khan Edition](https://github.com/hakai0fc/Khan)!",
-            "🤍 Made by [hakai0fc](https://github.com/hakai0fc).",
-            "☄️ By [hakai0fc/Khan](https://github.com/hakai0fc/Khan).",
-            "🌟 Star the project on GitHub!",
-            "🪶 Lite mode @ HAKAI Minimal"
+            "ðŸ”¥ Get good, get [HAKAI Khan Edition](https://github.com/hakai0fc/Khan)!",
+            "ðŸ¤ Made by [hakai0fc](https://github.com/hakai0fc).",
+            "â˜„ï¸ By [hakai0fc/Khan](https://github.com/hakai0fc/Khan).",
+            "ðŸŒŸ Star the project on GitHub!",
+            "ðŸª¶ Lite mode @ HAKAI Minimal"
         ];
-        
+
         const originalFetch = window.fetch;
-        
+
         window.fetch = async function (input, init) {
             try {
                 let body;
                 if (input instanceof Request) body = await input.clone().text();
                 else if (init && init.body) body = init.body;
-            
+
                 const originalResponse = await originalFetch.apply(this, arguments);
                 const clonedResponse = originalResponse.clone();
-            
+
                 try {
                     const responseBody = await clonedResponse.text();
                     let responseObj = JSON.parse(responseBody);
                     if (responseObj?.data?.assessmentItem?.item?.itemData) {
+                        let itemData = JSON.parse(responseObj.data.assessmentItem.item.itemData);
+                        if(itemData.question && itemData.question.content && itemData.question.content[0] === itemData.question.content[0].toUpperCase()){
+                            itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false }
+                            itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + `[[â˜ƒ radio 1]]`;
+                            itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [ { content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false } ] } } };
+                            responseObj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+                            sendToast("ðŸ”“ QuestÃ£o exploitada.", 1000);
+                            return new Response(JSON.stringify(responseObj), { status: originalResponse.status, statusText: originalResponse.statusText, headers: originalResponse.headers });
+                        }
+                    }
+                } catch (e) { /* ignore parse errors and return original response */ }
+                return originalResponse;
+            } catch(e){
+                return originalFetch.apply(this, arguments);
+            }
+        };
+    })();
+
+    /* VideoSpoof */
+    (function () {
+        const originalFetch = window.fetch;
+
+        window.fetch = async function (input, init) {
+            try {
+                let body;
+                if (input instanceof Request) body = await input.clone().text();
+                else if (init && init.body) body = init.body;
+                if (body && body.includes('"operationName":"updateUserVideoProgress"')) {
+                    try {
+                        let bodyObj = JSON.parse(body);
+                        if (bodyObj.variables && bodyObj.variables.input) {
+                            const durationSeconds = bodyObj.variables.input.durationSeconds;
+                            bodyObj.variables.input.secondsWatched = durationSeconds;
+                            bodyObj.variables.input.lastSecondWatched = durationSeconds;
+                            body = JSON.stringify(bodyObj);
+                            if (input instanceof Request) { input = new Request(input, { body: body }); } 
+                            else init.body = body; 
+                            sendToast("ðŸ”“ VÃ­deo exploitado.", 1000)
+                        }
+                    } catch (e) { console.debug(`ðŸš¨ Error @ videoSpoof.js\n${e}`); }
+                }
+            } catch(e){}
+            return originalFetch.apply(this, arguments);
+        };
+    })();
+
+    /* MinuteFarm */
+    (function () {
+        const originalFetch = window.fetch;
+
+        window.fetch = async function (input, init = {}) {
+            try {
+                let body;
+                if (input instanceof Request) body = await input.clone().text();
+                else if (init.body) body = init.body;
+                if (body && (typeof input === 'object' && input.url && input.url.includes("mark_conversions"))) {
+                    try {
+                        if (body.includes("termination_event")) { sendToast("ðŸš« Limitador de tempo bloqueado.", 1000); return; }
+                    } catch (e) { console.debug(`ðŸš¨ Error @ minuteFarm.js\n${e}`); }
+                }
+            } catch(e){}
+            return originalFetch.apply(this, arguments);
+        };
+    })();
+
+    /* AutoAnswer */
+    (function () {
+        const baseSelectors = [
+            `[data-testid="choice-icon__library-choice-icon"]`,
+            `[data-testid="exercise-check-answer"]`, 
+            `[data-testid="exercise-next-question"]`, 
+            `._1udzurba`,
+            `._awve9b`
+        ];
+
+        let khanwareDominates = true;
+
+        (async () => { 
+            while (khanwareDominates) {
+                const selectorsToCheck = [...baseSelectors];
+
+                for (const q of selectorsToCheck) {
+                    findAndClickBySelector(q);
+                    if (document.querySelector(q+"> div") && document.querySelector(q+"> div").innerText === "Mostrar resumo") {
+                        sendToast("ðŸŽ‰ ExercÃ­cio concluÃ­do!", 3000);
+                        playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
+                    }
+                }
+                await delay(800);
+            }
+        })();
+    })();
+}
+/* Inject */
+if (!/^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/.test(window.location.href)) { 
+    alert("âŒ HAKAI Failed to Inject!\n\nVocÃª precisa executar o HAKAI no site do Khan Academy! (https://pt.khanacademy.org/)");
+    window.location.href = "https://pt.khanacademy.org/"; 
+}
+
+showSplashScreen();
+
+loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin').then(()=>{ 
+    try { DarkReader.setFetchMethod(window.fetch); DarkReader.enable(); } catch(e){}
+})
+loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css', 'toastifyCss');
+loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin')
+.then(async () => {    
+    sendToast("ðŸª¶ HAKAI Minimal injetado com sucesso!");
+
+    playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+
+    await delay(500);
+
+    hideSplashScreen();
+    setupMain();
+
+    console.clear();
+});                    if (responseObj?.data?.assessmentItem?.item?.itemData) {
                         let itemData = JSON.parse(responseObj.data.assessmentItem.item.itemData);
                         if(itemData.question && itemData.question.content && itemData.question.content[0] === itemData.question.content[0].toUpperCase()){
                             itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false }
