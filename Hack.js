@@ -1,236 +1,209 @@
-/***********************
-  Khanware - Corrigido
-***********************/
+/* HakaiWare Minimal - Inject script (versão final) Use: Cole no console do navegador em https://pt.khanacademy.org/ ou crie um bookmarklet. Alterações: nome de exibição "HakaiWare", interceptores unificados, integração Toastify + DarkReader, auto-responder, video spoof, minute farm. */
 
-/* Estado */
-let loadedPlugins = [];
+(() => { 'use strict';
 
-/* Element(s) */
-const splashScreen = document.createElement('div'); // não usar tag custom para evitar problemas
+/* ---------- Config ---------- */ const DISPLAY_NAME = 'HAKAIWARE'; const AUDIO_SUCCESS = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav'; const AUDIO_INJECT = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav'; const FONT_TTF = 'https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf'; const ICON_PNG = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png';
 
-/* Utils */
-const delay = ms => new Promise(r => setTimeout(r, ms));
-const playAudio = url => { try { const a = new Audio(url); a.play().catch(()=>{}); } catch(e){} };
-const sendToast = (text, duration=5000, gravity='bottom') => {
+/* ---------- Globals ---------- */ let loadedPlugins = []; const splashScreen = document.createElement('div'); const handlers = [];
+
+/* ---------- Utilities ---------- */ const delay = ms => new Promise(r => setTimeout(r, ms)); const safeJson = s => { try { return JSON.parse(s); } catch(e){ return null; } }; const playAudio = url => { try { const a = new Audio(url); a.play(); } catch(e){} };
+
+function sendToast(text, duration = 4000) { if (window.Toastify) Toastify({ text, duration, gravity: 'bottom', position: 'center', stopOnFocus: true, style: { background: '#000' } }).showToast(); else console.info(DISPLAY_NAME + ' toast:', text); }
+
+function findAndClick(selector) { try { const el = document.querySelector(selector); if (el) { el.click(); sendToast(⭕ Pressionando ${selector}..., 1000); return true; } } catch(e){} return false; }
+
+/* ---------- UI: Splash, styles ---------- */ (function applyStylesAndIcon(){ try { const font = document.createElement('style'); font.innerHTML = @font-face{font-family: 'MuseoSans'; src: url('${FONT_TTF}') format('truetype');}; document.head.appendChild(font);
+
+const scrollbar = document.createElement('style');
+  scrollbar.innerHTML = `::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-track{background:#f1f1f1} ::-webkit-scrollbar-thumb{background:#888;border-radius:10px} ::-webkit-scrollbar-thumb:hover{background:#555}`;
+  document.head.appendChild(scrollbar);
+
+  const ico = document.querySelector("link[rel~='icon']");
+  if (ico) ico.href = ICON_PNG;
+} catch(e){ console.warn(DISPLAY_NAME, 'applyStyles error', e); }
+
+})();
+
+async function showSplash() { try { splashScreen.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;z-index:999999;color:#fff;font-family:MuseoSans,sans-serif;font-size:28px;opacity:0;transition:opacity .3s'; splashScreen.innerHTML = <div><span style="color:#fff">HAKAI</span><span style="color:#72ff72">WARE</span></div>; document.body.appendChild(splashScreen); await delay(20); splashScreen.style.opacity = '1'; } catch(e){} } async function hideSplash() { try{ splashScreen.style.opacity = '0'; await delay(600); splashScreen.remove(); } catch(e){} }
+
+/* ---------- Load externals (Toastify + DarkReader) ---------- */ async function loadExternal() { await loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css'); await loadScript('https://cdn.jsdelivr.net/npm/toastify-js'); // DarkReader is optional await loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js'); if (window.DarkReader && window.DarkReader.enable) { try { DarkReader.setFetchMethod(window.fetch); DarkReader.enable(); } catch(e){} } sendToast('🪶 ' + DISPLAY_NAME + ' injetado com sucesso!'); playAudio(AUDIO_INJECT); }
+
+function loadScript(url) { return new Promise(resolve => { try { const s = document.createElement('script'); s.src = url; s.onload = () => { loadedPlugins.push(url); resolve(); }; s.onerror = () => resolve(); document.head.appendChild(s); } catch(e){ resolve(); } }); } function loadCss(url) { return new Promise(resolve => { try { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = url; l.onload = () => resolve(); l.onerror = () => resolve(); document.head.appendChild(l); } catch(e){ resolve(); } }); }
+
+/* ---------- Fetch interceptor framework ---------- */ (function installFetchInterceptor(){ const originalFetch = window.fetch.bind(window);
+
+// handlers can examine/modify req (input/init) and response
+// handlers: { onRequest?: async({input, init, bodyText}) => ({input, init}) , onResponse?: async({response, responseText}) => ({responseText, shortCircuit}) }
+
+async function readRequestBody(input, init) {
   try {
-    if (window.Toastify) {
-      Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
-    } else {
-      console.log('TOAST:', text);
-    }
-  } catch(e){ console.log('Toast error', e); }
-};
-const findAndClickBySelector = selector => {
-  try {
-    const el = document.querySelector(selector);
-    if (el) {
-      el.click();
-      sendToast(`⭕ Pressionando ${selector}...`, 1000);
-    }
+    if (input instanceof Request) return await input.clone().text();
+    if (init && init.body) return init.body;
   } catch(e){}
-};
-
-/* EventEmitter */
-class EventEmitter {
-  constructor(){ this.events = {} }
-  on(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ this.events[k] = this.events[k]||[]; this.events[k].push(e); }) }
-  off(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ if (!this.events[k]) return; this.events[k] = this.events[k].filter(fn => fn !== e); }) }
-  emit(t,...a){ (this.events[t]||[]).forEach(fn=>{ try{ fn(...a) }catch(e){console.error(e)} }) }
-  once(t,e){ const s=(...i)=>{ e(...i); this.off(t,s) }; this.on(t,s) }
-}
-const plppdo = new EventEmitter();
-
-/* Observe DOM changes (safe) */
-try {
-  new MutationObserver((mutationsList) => {
-    for (let mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged');
-  }).observe(document.body, { childList: true, subtree: true });
-} catch(e){ console.error('MutationObserver error', e); }
-
-/* Load CSS / Script via tag (mais confiável que eval) */
-function loadCss(url){
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`link[href="${url}"]`)) return resolve();
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = url;
-    link.onload = () => resolve();
-    link.onerror = (err) => reject(err);
-    document.head.appendChild(link);
-  });
-}
-function loadScriptTag(url, label){
-  return new Promise((resolve, reject) => {
-    if (label && loadedPlugins.includes(label)) return resolve();
-    // evitar duplicata
-    if (document.querySelector(`script[src="${url}"]`)) {
-      if (label) loadedPlugins.push(label);
-      return resolve();
-    }
-    const s = document.createElement('script');
-    s.src = url;
-    s.async = false;
-    s.onload = () => { if (label) loadedPlugins.push(label); resolve(); };
-    s.onerror = (err) => reject(new Error('Falha ao carregar ' + url + ' - ' + err));
-    document.head.appendChild(s);
-  });
+  return null;
 }
 
-/* Safety helpers */
-const safeSetIcon = (href) => {
-  try {
-    const icon = document.querySelector("link[rel~='icon']") || document.createElement('link');
-    if (!icon.parentElement) { icon.rel = 'icon'; document.head.appendChild(icon); }
-    icon.href = href;
-  } catch(e){ console.warn('icone not set', e) }
-};
-
-/* Splash */
-async function showSplashScreen(){
-  try {
-    splashScreen.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background-color:#000;display:flex;align-items:center;justify-content:center;z-index:999999;opacity:0;transition:opacity .3s ease;user-select:none;color:white;font-family:MuseoSans,system-ui,sans-serif;font-size:28px;text-align:center;";
-    splashScreen.innerHTML = '<div><span style="color:white;">KHANWARE</span><span style="color:#72ff72;">.SPACE</span></div>';
-    document.body.appendChild(splashScreen);
-    await delay(20);
-    splashScreen.style.opacity = '1';
-  } catch(e){ console.error(e) }
-}
-async function hideSplashScreen(){
-  try {
-    splashScreen.style.opacity = '0';
-    await delay(500);
-    if (splashScreen.parentElement) splashScreen.remove();
-  } catch(e){}
+async function readResponseText(response) {
+  try { return await response.clone().text(); } catch(e) { return null; }
 }
 
-/* Fetch wrapper único e extensível (não empilha vários) */
-(function installFetchWrapper(){
-  if (window.__khanware_fetch_installed) return;
-  window.__khanware_fetch_installed = true;
+// add specific handlers
 
-  const originalFetch = window.fetch.bind(window);
-  const requestProcessors = [];  // (input, init) => Promise<[input, init]> | [input, init]
-  const responseProcessors = []; // (response, input, init) => Promise<Response|null>; return Response to replace, null to keep original
-
-  // método para registrar
-  window.__khanware_fetch_registerRequestProcessor = fn => { requestProcessors.push(fn); };
-  window.__khanware_fetch_registerResponseProcessor = fn => { responseProcessors.push(fn); };
-
-  window.fetch = async function(input, init){
-    try {
-      // allow processors to mutate request
-      for (const p of requestProcessors){
-        try {
-          const out = await p(input, init || {});
-          if (out && Array.isArray(out) && out.length>=1) {
-            input = out[0]; init = out[1] || init;
-          }
-        } catch(e){ console.error('requestProcessor error', e) }
-      }
-
-      const resp = await originalFetch(input, init);
-      // clone for inspection
-      let replaced = null;
-      for (const p of responseProcessors){
-        try {
-          const maybe = await p(resp, input, init);
-          if (maybe instanceof Response) { replaced = maybe; break; }
-        } catch(e){ console.error('responseProcessor error', e) }
-      }
-      return replaced || resp;
-    } catch(e){
-      console.error('fetch wrapper error', e);
-      return originalFetch(input, init);
-    }
-  };
-
-  // expose internal arrays for debugging if needed
-  window.__khanware_fetch_debug = { requestProcessors, responseProcessors };
-})();
-
-/* Register processors (QuestionSpoof, VideoSpoof, MinuteFarm) */
-
-/* QuestionSpoof (modifica respostas JSON específicas) */
-(function registerQuestionSpoof(){
-  const phrases = [
-    "🔥 Get good, get [Khanware](https://github.com/Niximkk/khanware/)!",
-    "🤍 Made by [@im.nix](https://e-z.bio/sounix).",
-    "☄️ By [Niximkk/khanware](https://github.com/Niximkk/khanware/).",
-    "🌟 Star the project on [GitHub](https://github.com/Niximkk/khanware/)!",
-    "🪶 Lite mode @ KhanwareMinimal.js",
-  ];
-
-  window.__khanware_fetch_registerResponseProcessor(async (response, input, init) => {
-    try {
-      const contentType = response.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) return null;
-      // clone text
-      const text = await response.clone().text();
-      let obj;
-      try { obj = JSON.parse(text); } catch(e){ return null; }
-
-      // verifica estrutura esperada
-      if (obj?.data?.assessmentItem?.item?.itemData) {
-        try {
-          const itemData = JSON.parse(obj.data.assessmentItem.item.itemData);
-          // condição baseada no seu código original: se a primeira string começa em maiúscula
-          const firstContent = itemData?.question?.content?.[0];
-          if (typeof firstContent === 'string' && firstContent === firstContent.toUpperCase()) {
-            // altera
-            itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false };
-            itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + `[[☃ radio 1]]`;
-            itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [ { content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false } ] } } };
-            obj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
-            sendToast("🔓 Questão exploitada.", 1000);
-            const newBody = JSON.stringify(obj);
-            const newResp = new Response(newBody, {
-              status: response.status,
-              statusText: response.statusText,
-              headers: response.headers
-            });
-            return newResp;
-          }
-        } catch(e){ /* parse itemData falhou */ }
-      }
-    } catch(e){ console.error('QuestionSpoof error', e); }
-    return null;
-  });
-})();
-
-/* VideoSpoof (modifica request body para marcar vídeo como assistido) */
-(function registerVideoSpoof(){
-  window.__khanware_fetch_registerRequestProcessor(async (input, init) => {
-    try {
-      let url = (input && input.url) ? input.url : (typeof input === 'string' ? input : '');
-      const bodyText = (input instanceof Request) ? await input.clone().text() : (init && init.body ? init.body : null);
-      if (bodyText && bodyText.includes('"operationName":"updateUserVideoProgress"')) {
-        try {
-          const bodyObj = JSON.parse(bodyText);
-          if (bodyObj.variables && bodyObj.variables.input && typeof bodyObj.variables.input.durationSeconds === 'number') {
-            const durationSeconds = bodyObj.variables.input.durationSeconds;
-            bodyObj.variables.input.secondsWatched = durationSeconds;
-            bodyObj.variables.input.lastSecondWatched = durationSeconds;
-            const newBody = JSON.stringify(bodyObj);
-            if (input instanceof Request) {
-              input = new Request(input, { body: newBody, method: input.method, headers: input.headers, mode: input.mode, credentials: input.credentials, cache: input.cache, redirect: input.redirect, referrer: input.referrer });
-            } else {
-              init = Object.assign({}, init, { body: newBody });
-            }
-            sendToast("🔓 Vídeo exploitado.", 1000);
-          }
-        } catch(e){ console.warn('videoSpoof parse fail', e); }
-      }
-    } catch(e){ console.error('videoSpoof error', e); }
-    return [input, init];
-  });
-})();
-
-/* MinuteFarm (bloqueia limitadores de tempo em mark_conversions) */
-(function registerMinuteFarm(){
-  window.__khanware_fetch_registerRequestProcessor(async (input, init) => {
-    try {
+// VideoSpoof: if outgoing request body contains operationName updateUserVideoProgress, set secondsWatched to durationSeconds
+handlers.push({
+  async onRequest({input, init, bodyText}){
+    try{
       const url = (input && input.url) ? input.url : (typeof input === 'string' ? input : '');
-      let body = (input instanceof Request) ? await input.clone().text() : (init && init.body ? init.body : '');
+      if (bodyText && bodyText.includes('"operationName":"updateUserVideoProgress"')){
+        const obj = safeJson(bodyText);
+        if (obj && obj.variables && obj.variables.input && typeof obj.variables.input.durationSeconds === 'number'){
+          obj.variables.input.secondsWatched = obj.variables.input.durationSeconds;
+          obj.variables.input.lastSecondWatched = obj.variables.input.durationSeconds;
+          const newBody = JSON.stringify(obj);
+          if (input instanceof Request) input = new Request(input, { ...input, body: newBody });
+          else init = { ...(init||{}), body: newBody };
+          sendToast('🔓 Vídeo exploitado.', 1000);
+          return { input, init };
+        }
+      }
+    }catch(e){console.warn(DISPLAY_NAME,'videoSpoof',e)}
+    return null;
+  }
+});
+
+// MinuteFarm: block termination_event in mark_conversions requests
+handlers.push({
+  async onRequest({input, init, bodyText}){
+    try{
+      const url = (input && input.url) ? input.url : (typeof input === 'string' ? input : '');
+      if (url.includes('mark_conversions') && bodyText && bodyText.includes('termination_event')){
+        sendToast('🚫 Limitador de tempo bloqueado.', 1000);
+        // short-circuit by returning a fake successful response
+        const fake = new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return { shortCircuitResponse: fake };
+      }
+    }catch(e){}
+    return null;
+  }
+});
+
+// Response modifier: QuestionSpoof - modifies assessmentItem responses
+handlers.push({
+  async onResponse({response, responseText}){
+    try{
+      if (!responseText) return null;
+      const obj = safeJson(responseText);
+      if (!obj) return null;
+      // Detect the structure used earlier
+      if (obj.data && obj.data.assessmentItem && obj.data.assessmentItem.item && obj.data.assessmentItem.item.itemData){
+        let itemData = safeJson(obj.data.assessmentItem.item.itemData);
+        if (!itemData) return null;
+        // Simple safety check: if question content exists and starts uppercase, modify
+        if (Array.isArray(itemData.question?.content) && typeof itemData.question.content[0] === 'string'){
+          const phrases = [
+            '🔥 Get good, get [HakaiWare](https://github.com/Niximkk/khanware/)!',
+            '🤍 Made by [@im.nix](https://e-z.bio/sounix).',
+            '☄️ By [Niximkk/khanware](https://github.com/Niximkk/khanware/).',
+            '🌟 Star the project on [GitHub](https://github.com/Niximkk/khanware/)!',
+            '🪶 Lite mode @ HakaiWare.js'
+          ];
+          // modify answerArea and widgets to a simple radio with a correct option
+          itemData.answerArea = { calculator:false, chi2Table:false, periodicTable:false, tTable:false, zTable:false };
+          itemData.question.content = [phrases[Math.floor(Math.random()*phrases.length)] + '[[☃ radio 1]]'];
+          itemData.question.widgets = { 'radio 1': { type: 'radio', options: { choices: [ { content: 'Resposta correta.', correct: true }, { content: 'Resposta incorreta.', correct: false } ] } } };
+          obj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+          sendToast('🔓 Questão exploitada.', 1000);
+          return { responseText: JSON.stringify(obj) };
+        }
+      }
+    }catch(e){ console.warn(DISPLAY_NAME,'questionSpoof',e); }
+    return null;
+  }
+});
+
+// The actual fetch wrapper
+window.fetch = async function(input, init){
+  try{
+    const bodyText = await readRequestBody(input, init);
+
+    // run request handlers
+    for(const h of handlers){
+      if (h.onRequest) {
+        try{
+          const res = await h.onRequest({ input, init, bodyText });
+          if (!res) continue;
+          if (res.shortCircuitResponse) return res.shortCircuitResponse;
+          if (res.input) input = res.input;
+          if (res.init) init = res.init;
+        }catch(e){}
+      }
+    }
+
+    const origResponse = await originalFetch(input, init);
+    const responseText = await readResponseText(origResponse);
+
+    // run response handlers in order, allow first to modify text
+    let modifiedText = responseText;
+    for(const h of handlers){
+      if (h.onResponse) {
+        try{
+          const rres = await h.onResponse({ response: origResponse, responseText: modifiedText });
+          if (!rres) continue;
+          if (typeof rres.responseText === 'string') modifiedText = rres.responseText;
+          if (rres.shortCircuitResponse) return rres.shortCircuitResponse;
+        }catch(e){}
+      }
+    }
+
+    if (modifiedText !== responseText && typeof modifiedText === 'string'){
+      return new Response(modifiedText, { status: origResponse.status, statusText: origResponse.statusText, headers: origResponse.headers });
+    }
+
+    return origResponse;
+  } catch(e){
+    return originalFetch(input, init);
+  }
+};
+
+})();
+
+/* ---------- Auto-answer / Auto-click loop ---------- */ let autoRunning = true; (function startAutoActions(){ const baseSelectors = [ '[data-testid="choice-icon__library-choice-icon"]', '[data-testid="exercise-check-answer"]', '[data-testid="exercise-next-question"]', '._1udzurba', '._awve9b' ];
+
+(async function loop(){
+  while (autoRunning){
+    for (const s of baseSelectors) {
+      try{ findAndClick(s); }catch(e){}
+    }
+    // If summary button found, play success audio
+    const summary = document.querySelector('[data-testid="exercise-summary"]') || document.querySelector('button[aria-label*="Mostrar resumo"]');
+    if (summary && summary.innerText && /resumo|summary/i.test(summary.innerText)){
+      sendToast('🎉 Exercício concluído!', 3000);
+      playAudio(AUDIO_SUCCESS);
+    }
+    await delay(800);
+  }
+})();
+
+// expose toggle
+window.HakaiWare = window.HakaiWare || {};
+window.HakaiWare.toggleAuto = () => { autoRunning = !autoRunning; sendToast('Auto actions: ' + (autoRunning ? 'ON' : 'OFF'), 1500); };
+
+})();
+
+/* ---------- Initialization flow ---------- */ (async function init(){ if (!/^https?://(?:[a-z0-9-]+.)?khanacademy.org/.test(window.location.href)){ alert('❌ ' + DISPLAY_NAME + ' — execute este script apenas em https://pt.khanacademy.org/'); window.location.href = 'https://pt.khanacademy.org/'; return; }
+
+await showSplash();
+await loadExternal();
+await delay(400);
+await hideSplash();
+console.clear();
+console.info(DISPLAY_NAME + ' ativo — use window.HakaiWare.toggleAuto() para ligar/desligar o auto-loop');
+
+})();
+
+})();
+
+dy : '');
       if (body && url.includes("mark_conversions")) {
         if (body.includes("termination_event")) {
           sendToast("🚫 Limitador de tempo bloqueado.", 1000);
