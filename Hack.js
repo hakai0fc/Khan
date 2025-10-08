@@ -1,75 +1,167 @@
-/***********************
-  Khanware - Corrigido
-  Cole tudo e execute
-***********************/
+/***********************************************
+  HakaiWare 
+***********************************************/
 
-/* Estado */
-let loadedPlugins = [];
+(() => {
+  if (window.__hakaiware_loaded) { console.info('HakaiWare already loaded'); return; }
+  window.__hakaiware_loaded = true;
 
-/* Element(s) */
-const splashScreen = document.createElement('div'); // não usar tag custom para evitar problemas
+  const CONFIG = {
+    name: 'HakaiWare',
+    splashMain: 'HAKAIWARE',
+    splashSub: '.SPACE',
+    icon: 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png',
+    font: 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf',
+    toastDuration: 2200
+  };
 
-/* Utils */
-const delay = ms => new Promise(r => setTimeout(r, ms));
-const playAudio = url => { try { const a = new Audio(url); a.play().catch(()=>{}); } catch(e){} };
-const sendToast = (text, duration=5000, gravity='bottom') => {
-  try {
-    if (window.Toastify) {
-      Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
-    } else {
-      console.log('TOAST:', text);
+  // state & plugins
+  const loadedPlugins = [];
+  const state = { AutoAnswer: false, VideoSpoof: false, MinuteFarm: false };
+
+  // small helpers
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+  const safeLog = (...a) => console.log(`[${CONFIG.name}]`, ...a);
+  const safePlay = url => { try { const a = new Audio(url); a.play().catch(()=>{}); } catch(e){} };
+
+  // toast (uses Toastify if available)
+  function toast(text, dur = CONFIG.toastDuration) {
+    try {
+      if (window.Toastify) Toastify({ text, duration: dur, gravity: 'bottom', position: 'center', stopOnFocus: true, style: { background: '#111', color: '#fff' } }).showToast();
+      else console.info('[Toast]', text);
+    } catch(e){ console.error('Toast err', e); }
+  }
+
+  // loaders
+  function loadCss(url) {
+    return new Promise((res, rej) => {
+      if (document.querySelector(`link[href="${url}"]`)) return res();
+      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = url;
+      l.onload = () => res(); l.onerror = e => rej(e);
+      document.head.appendChild(l);
+    });
+  }
+  function loadScript(url, label) {
+    return new Promise((res, rej) => {
+      if (label && loadedPlugins.includes(label)) return res();
+      if (document.querySelector(`script[src="${url}"]`)) { if (label) loadedPlugins.push(label); return res(); }
+      const s = document.createElement('script'); s.src = url; s.async = false;
+      s.onload = () => { if (label) loadedPlugins.push(label); res(); };
+      s.onerror = e => rej(e);
+      document.head.appendChild(s);
+    });
+  }
+
+  // safe icon/font injection
+  function setIcon(url) {
+    try {
+      let link = document.querySelector('link[rel~="icon"]');
+      if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+      link.href = url;
+    } catch(e){ console.warn('setIcon fail', e); }
+  }
+  function injectFont(url) {
+    try {
+      const s = document.createElement('style');
+      s.textContent = `@font-face{font-family:'HakaiSans';src:url('${url}') format('truetype');}`;
+      document.head.appendChild(s);
+    } catch(e){}
+  }
+
+  // neutral fetch wrapper (no active processors)
+  (function installFetchWrapper(){
+    if (window.__hakaiware_fetch_installed) return;
+    window.__hakaiware_fetch_installed = true;
+    const orig = window.fetch.bind(window);
+    const reqProcs = [];
+    const resProcs = [];
+    window.__hakaiware_fetch_registerRequestProcessor = fn => reqProcs.push(fn);
+    window.__hakaiware_fetch_registerResponseProcessor = fn => resProcs.push(fn);
+
+    window.fetch = async function(input, init) {
+      try {
+        for (const p of reqProcs) { // none by default
+          try { const out = await p(input, init || {}); if (Array.isArray(out)) { input = out[0]; init = out[1] || init; } } catch(e){ console.error(e); }
+        }
+        const r = await orig(input, init);
+        for (const p of resProcs) {
+          try { const maybe = await p(r, input, init); if (maybe instanceof Response) return maybe; } catch(e){ console.error(e); }
+        }
+        return r;
+      } catch(e) { console.error('fetch wrapper error', e); return orig(input, init); }
+    };
+    window.__hakaiware_fetch_debug = { reqProcs, resProcs };
+  })();
+
+  // splash (minimal)
+  const splash = document.createElement('div');
+  async function showSplash() {
+    splash.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9999999;background:#000;color:#fff;font-family:HakaiSans,system-ui; font-size:28px';
+    splash.innerHTML = `<div style="text-align:center"><div><span style="color:#fff">${CONFIG.splashMain}</span><span style="color:#72ff72">${CONFIG.splashSub}</span></div><div style="font-size:12px;opacity:.8;margin-top:6px">by HakaiOfc</div></div>`;
+    document.body.appendChild(splash);
+    await delay(180);
+  }
+  async function hideSplash() { try { splash.style.opacity = '0'; await delay(180); if (splash.parentElement) splash.remove(); } catch(e){} }
+
+  // simple control UI (simulates modules; safe)
+  function createPanel() {
+    if (document.getElementById('__hakaiware_panel')) return;
+    const p = document.createElement('div');
+    p.id = '__hakaiware_panel';
+    p.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:9999999;background:rgba(0,0,0,.8);color:#fff;padding:10px;border-radius:10px;font-family:HakaiSans,system-ui;min-width:170px';
+    p.innerHTML = `<div style="font-weight:700;margin-bottom:6px">${CONFIG.name} Controls</div>`;
+    ['AutoAnswer','VideoSpoof','MinuteFarm'].forEach(mod => {
+      const row = document.createElement('div'); row.style.display='flex';row.style.justifyContent='space-between';row.style.alignItems='center';row.style.marginBottom='6px';
+      const lbl = document.createElement('div'); lbl.textContent = mod; lbl.style.fontSize='13px';
+      const btn = document.createElement('button'); btn.textContent='OFF'; btn.dataset.on='0'; btn.style.padding='6px 8px'; btn.style.border='none'; btn.style.borderRadius='6px'; btn.style.background='#222'; btn.style.color='#fff';
+      btn.onclick = () => {
+        const on = btn.dataset.on==='1';
+        btn.dataset.on = on ? '0' : '1'; btn.textContent = on ? 'OFF' : 'ON'; btn.style.background = on ? '#222' : '#0a7';
+        state[mod] = !on;
+        toast(`${mod} ${state[mod] ? 'ENABLED (simulated)' : 'DISABLED (simulated)'}`);
+        window.dispatchEvent(new CustomEvent('__hakaiware_module_toggle', { detail:{ module: mod, enabled: state[mod] } }));
+      };
+      row.appendChild(lbl); row.appendChild(btn); p.appendChild(row);
+    });
+    const note = document.createElement('div'); note.style.fontSize='11px'; note.style.opacity='.8'; note.textContent = 'Simulated toggles — safe for testing';
+    p.appendChild(note);
+    document.body.appendChild(p);
+  }
+
+  // small helper: click selector (safe)
+  function clickSelector(sel) {
+    try {
+      const el = document.querySelector(sel);
+      if (el) { el.click(); toast(`Clicked ${sel}`); return true; }
+    } catch(e){ console.warn(e); }
+    return false;
+  }
+
+  // boot
+  (async () => {
+    try {
+      injectFont(CONFIG.font);
+      setIcon(CONFIG.icon);
+      await showSplash();
+      // optional: load Toastify (silent fail)
+      try { await loadCss('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css'); await loadScript('https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.js','toastify'); } catch(e){}
+      toast(`${CONFIG.name} ready (safe)`);
+      safePlay(CONFIG.icon).catch?.(()=>{});
+      createPanel();
+      await delay(280);
+      hideSplash();
+
+      // expose small API
+      window.__hakaiware = { CONFIG, state, loadedPlugins, clickSelector, toast };
+      safeLog('HakaiWare (sanitized) initialized');
+    } catch(err) {
+      console.error('HakaiWare boot error', err);
+      hideSplash();
+      toast('HakaiWare failed to initialize');
     }
-  } catch(e){ console.log('Toast error', e); }
-};
-const findAndClickBySelector = selector => {
-  try {
-    const el = document.querySelector(selector);
-    if (el) {
-      el.click();
-      sendToast(`⭕ Pressionando ${selector}...`, 1000);
-    }
-  } catch(e){}
-};
+  })();
 
-/* EventEmitter */
-class EventEmitter {
-  constructor(){ this.events = {} }
-  on(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ this.events[k] = this.events[k]||[]; this.events[k].push(e); }) }
-  off(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ if (!this.events[k]) return; this.events[k] = this.events[k].filter(fn => fn !== e); }) }
-  emit(t,...a){ (this.events[t]||[]).forEach(fn=>{ try{ fn(...a) }catch(e){console.error(e)} }) }
-  once(t,e){ const s=(...i)=>{ e(...i); this.off(t,s) }; this.on(t,s) }
-}
-const plppdo = new EventEmitter();
-
-/* Observe DOM changes (safe) */
-try {
-  new MutationObserver((mutationsList) => {
-    for (let mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged');
-  }).observe(document.body, { childList: true, subtree: true });
-} catch(e){ console.error('MutationObserver error', e); }
-
-/* Load CSS / Script via tag (mais confiável que eval) */
-function loadCss(url){
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`link[href="${url}"]`)) return resolve();
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = url;
-    link.onload = () => resolve();
-    link.onerror = (err) => reject(err);
-    document.head.appendChild(link);
-  });
-}
-function loadScriptTag(url, label){
-  return new Promise((resolve, reject) => {
-    if (label && loadedPlugins.includes(label)) return resolve();
-    // evitar duplicata
-    if (document.querySelector(`script[src="${url}"]`)) {
-      if (label) loadedPlugins.push(label);
-      return resolve();
-    }
-    const s = document.createElement('script');
-    s.src = url;
+})();    s.src = url;
     s.async = false;
     s.onload = () => { if (label) loadedPlugins.push(label); resolve(); };
     s.onerror = (err) => reject(new Error('Falha ao carregar ' + url + ' - ' + err));
