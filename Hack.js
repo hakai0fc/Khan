@@ -1,75 +1,78 @@
-/***********************
-  HakaiWare - Atualizado (sem HUD)
-***********************/
+// ...
 
-/* Estado */
-let loadedPlugins = [];
+// Mudar o nome de exibição para HakaiWare
+const phrases = [
+  "🔥 Get good, get HakaiWare!",
+  "🤍 Made by @im.nix.",
+  "☄️ By Niximkk/HakaiWare.",
+  "🌟 Star the project on GitHub!",
+  "🪶 Lite mode @ HakaiWare.js",
+];
 
-/* Element(s) */
-const splashScreen = document.createElement('div'); // usar div genérica
+// ...
 
-/* Utilitários */
-const delay = ms => new Promise(r => setTimeout(r, ms));
-const playAudio = url => { try { const a = new Audio(url); a.play().catch(()=>{}); } catch(e){} };
-const sendToast = (text, duration=5000) => {
-  try {
-    if (window.Toastify) Toastify({ text, duration, gravity: "bottom", position: "center", stopOnFocus: true, style: { background: "#000" } }).showToast();
-    else console.log('[HakaiWare toast]', text);
-  } catch(e){ console.log('[HakaiWare toast error]', e); }
-};
-const findAndClickBySelector = async (selector, opts = { scroll: true, retries: 3, retryDelay: 120 }) => {
-  for (let i = 0; i < opts.retries; i++) {
-    try {
-      const el = document.querySelector(selector);
-      if (el) {
-        if (opts.scroll && el.scrollIntoView) el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
-        el.click();
-        sendToast(`⭕ Pressionando ${selector}...`, 900);
-        return true;
+// Corrigir o código
+function setupMain(){
+  // ...
+  
+  // QuestionSpoof
+  (function () {
+    // ...
+    
+    itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + " ☃ radio 1";
+    itemData.question.widgets = {
+      "radio 1": {
+        type: "radio",
+        options: {
+          choices: [
+            { content: "Resposta correta.", correct: true },
+            { content: "Resposta incorreta.", correct: false }
+          ]
+        }
       }
-    } catch (e) { /* ignore */ }
-    await delay(opts.retryDelay);
-  }
-  return false;
-};
-
-/* EventEmitter */
-class EventEmitter {
-  constructor(){ this.events = {} }
-  on(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ (this.events[k]||(this.events[k]=[])).push(e); }) }
-  off(t,e){ if (typeof t === 'string') t=[t]; t.forEach(k=>{ if (!this.events[k]) return; this.events[k] = this.events[k].filter(fn => fn !== e); }) }
-  emit(t,...a){ (this.events[t]||[]).forEach(fn=>{ try{ fn(...a) }catch(e){console.error(e)} }) }
-  once(t,e){ const s=(...i)=>{ e(...i); this.off(t,s) }; this.on(t,s) }
+    };
+    
+    // ...
+  })();
+  
+  // ...
 }
-const plppdo = new EventEmitter();
 
-/* Observe DOM changes (safe) */
-try {
-  new MutationObserver(mutations => {
-    for (const m of mutations) if (m.type === 'childList') plppdo.emit('domChanged');
-  }).observe(document.body, { childList: true, subtree: true });
-} catch(e){ console.warn('[HakaiWare] MutationObserver failed', e); }
+// Injetar o script
+if (!/^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/.test(window.location.href)) {
+  alert("❌ HakaiWare Failed to Injected!\n\nVocê precisa executar o HakaiWare no site do Khan Academy! (https:                         
+  window.location.href = "//pt.khanacademy.org/)");
+  window.location.href = "https://pt.khanacademy.org/";
+}
 
-/* Safe load helpers (no eval) */
-function loadCss(url){
-  return new Promise((res,rej) => {
-    if (document.querySelector(`link[href="${url}"]`)) return res();
-    const l = document.createElement('link'); l.rel='stylesheet'; l.href=url;
-    l.onload = () => res(); l.onerror = e => rej(e);
-    document.head.appendChild(l);
+showSplashScreen();
+
+loadScript('https:                                                                                
+  .then(() => {
+    DarkReader.setFetchMethod(window.fetch);
+    DarkReader.enable();
   });
-}
-function loadScriptTag(url, label){
-  return new Promise((res,rej) => {
-    if (label && loadedPlugins.includes(label)) return res();
-    if (document.querySelector(`script[src="${url}"]`)) { if (label) loadedPlugins.push(label); return res(); }
-    const s = document.createElement('script'); s.src = url; s.async = false;
-    s.onload = () => { if (label) loadedPlugins.push(label); res(); };
-    s.onerror = e => rej(new Error('Falha ao carregar ' + url + ' - ' + e));
-    document.head.appendChild(s);
-  });
-}
 
+loadCss('//cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin')
+  .then(() => {
+    DarkReader.setFetchMethod(window.fetch);
+    DarkReader.enable();
+  });
+
+loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css', 'toastifyCss');
+
+loadScript('https:                                                      
+  .then(async () => {
+    sendToast("🪶 HakaiWare Minimal injetado com sucesso!");
+    playAudio('//cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin')
+  .then(async () => {
+    sendToast("🪶 HakaiWare Minimal injetado com sucesso!");
+    playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+    await delay(500);
+    hideSplashScreen();
+    setupMain();
+    console.clear();
+  });
 /* safe icon/font */
 function safeSetIcon(href){
   try {
