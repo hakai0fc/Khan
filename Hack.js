@@ -38,17 +38,17 @@ function setupMain(){
             "🌟 Star the project on [GitHub](https://github.com/Niximkk/khanware/)!",
             "🪶 Lite mode @ KhanwareMinimal.js",
         ];
-        
+
         const originalFetch = window.fetch;
-        
+
         window.fetch = async function (input, init) {
             let body;
             if (input instanceof Request) body = await input.clone().text();
             else if (init && init.body) body = init.body;
-        
+
             const originalResponse = await originalFetch.apply(this, arguments);
             const clonedResponse = originalResponse.clone();
-        
+
             try {
                 const responseBody = await clonedResponse.text();
                 let responseObj = JSON.parse(responseBody);
@@ -70,6 +70,95 @@ function setupMain(){
 
     /* VideoSpoof */
     (function () {
+        const originalFetch = window.fetch;
+
+        window.fetch = async function (input, init) {
+            let body;
+            if (input instanceof Request) body = await input.clone().text();
+            else if (init && init.body) body = init.body;
+            if (body && body.includes('"operationName":"updateUserVideoProgress"')) {
+                try {
+                    let bodyObj = JSON.parse(body);
+                    if (bodyObj.variables && bodyObj.variables.input) {
+                        const durationSeconds = bodyObj.variables.input.durationSeconds;
+                        bodyObj.variables.input.secondsWatched = durationSeconds;
+                        bodyObj.variables.input.lastSecondWatched = durationSeconds;
+                        body = JSON.stringify(bodyObj);
+                        if (input instanceof Request) { input = new Request(input, { body: body }); } 
+                        else init.body = body; 
+                        sendToast("🔓 Vídeo exploitado.", 1000)
+                    }
+                } catch (e) { debug(`🚨 Error @ videoSpoof.js\n${e}`); }
+            }
+            return originalFetch.apply(this, arguments);
+        };
+    })();
+
+    /* MinuteFarm */
+    (function () {
+        const originalFetch = window.fetch;
+
+        window.fetch = async function (input, init = {}) {
+            let body;
+            if (input instanceof Request) body = await input.clone().text();
+            else if (init.body) body = init.body;
+            if (body && input.url.includes("mark_conversions")) {
+                try {
+                    if (body.includes("termination_event")) { sendToast("🚫 Limitador de tempo bloqueado.", 1000); return; }
+                } catch (e) { debug(`🚨 Error @ minuteFarm.js\n${e}`); }
+            }
+            return originalFetch.apply(this, arguments);
+        };
+    })();
+
+    /* AutoAnswer */
+    (function () {
+        const baseSelectors = [
+            `[data-testid="choice-icon__library-choice-icon"]`,
+            `[data-testid="exercise-check-answer"]`, 
+            `[data-testid="exercise-next-question"]`, 
+            `._1udzurba`,
+            `._awve9b`
+        ];
+
+        khanwareDominates = true;
+
+        (async () => { 
+            while (khanwareDominates) {
+                const selectorsToCheck = [...baseSelectors];
+
+                for (const q of selectorsToCheck) {
+                    findAndClickBySelector(q);
+                    if (document.querySelector(q+"> div") && document.querySelector(q+"> div").innerText === "Mostrar resumo") {
+                        sendToast("🎉 Exercício concluído!", 3000);
+                        playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
+                    }
+                }
+                await delay(800);
+            }
+        })();
+    })();
+}
+/* Inject */
+if (!/^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/.test(window.location.href)) { alert("❌ Khanware Failed to Injected!\n\nVocê precisa executar o Khanware no site do Khan Academy! (https://pt.khanacademy.org/)"); window.location.href = "https://pt.khanacademy.org/"; }
+
+showSplashScreen();
+
+loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin').then(()=>{ DarkReader.setFetchMethod(window.fetch); DarkReader.enable(); })
+loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css', 'toastifyCss');
+loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin')
+.then(async () => {    
+    sendToast("🪶 Khanware Minimal injetado com sucesso!");
+
+    playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+
+    await delay(500);
+
+    hideSplashScreen();
+    setupMain();
+
+    console.clear();
+});    (function () {
         const originalFetch = window.fetch;
 
         window.fetch = async function (input, init) {
