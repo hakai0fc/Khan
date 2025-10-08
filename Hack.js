@@ -1,260 +1,153 @@
-// == HakaiWare Minimal Injector ==
-// Copiar / colar no console do navegador (ou userscript)
+/* HakaiWare (Safe edition) - for raw GitHub hosting
+ * Safe features only: splash, DarkReader (optional), Toastify toasts,
+ * custom font, favicon swap, simple UI toggles and MutationObserver.
+ * No auto-answer, no video spoofing, no network payload tampering.
+ */
 
-// Config
-let loadedPlugins = [];
+(async function HakaiWareSafe(){
+  'use strict';
 
-// Element(s)
-const splashScreen = document.createElement('div');
+  // Basic metadata
+  const META = {
+    name: "HakaiWare Safe",
+    version: "1.0.0",
+    author: "hakai0fc",
+  };
 
-// Styles (font + scrollbars)
-document.head.appendChild(Object.assign(document.createElement("style"), {
-  innerHTML: `
-@font-face {
-  font-family: 'MuseoSans';
-  src: url('https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf') format('truetype');
-}
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: #f1f1f1; }
-::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #555; }
-`
-}}));
+  // --- Utilities ---
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const safeFetchText = async (url) => { const r = await fetch(url); return await r.text(); };
 
-// change favicon safely if exists
-try { const ico = document.querySelector("link[rel~='icon']"); if (ico) ico.href = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png'; } catch(e){}
+  // --- DOM / styles ---
+  // Splash element
+  const splash = document.createElement('div');
+  splash.id = 'hakaiware-splash';
+  splash.style.cssText = [
+    'position:fixed','inset:0','display:flex','align-items:center','justify-content:center',
+    'z-index:2147483647','background:#000000cc','color:#fff','font-family:MuseoSans, sans-serif',
+    'font-size:28px','transition:opacity .35s ease','opacity:0'
+  ].join(';');
 
-// Simple EventEmitter
-class EventEmitter {
-  constructor(){ this.events = {} }
-  on(t, e){ if (typeof t === 'string') t = [t]; t.forEach(k => { this.events[k] = this.events[k] || []; this.events[k].push(e); }) }
-  off(t, e){ if (typeof t === 'string') t = [t]; t.forEach(k => { if (this.events[k]) this.events[k] = this.events[k].filter(fn => fn !== e) }) }
-  emit(t, ...a){ (this.events[t]||[]).forEach(fn => fn(...a)) }
-  once(t,e){ const s = (...i)=>{ e(...i); this.off(t,s) }; this.on(t,s) }
-}
-const plppdo = new EventEmitter();
+  // Add font-face + scrollbar styles
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+@font-face{font-family:'MuseoSans';src:url('https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf') format('truetype');}
+#hakaiware-splash { pointer-events:none; }
+::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #f1f1f1;} ::-webkit-scrollbar-thumb { background: #888; border-radius:10px;}
+`;
+  document.head.appendChild(styleEl);
 
-// Mutation observer to emit domChanged
-new MutationObserver((mutationsList) => {
-  for (let mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged');
-}).observe(document.body, { childList: true, subtree: true });
+  // favicon swap (safe attempt)
+  try{
+    const ico = document.querySelector("link[rel~='icon']");
+    if(ico) ico.href = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png';
+  }catch(e){/* noop */}
 
-// Utility functions
-const delay = ms => new Promise(r => setTimeout(r, ms));
-const playAudio = url => { try { const a = new Audio(url); a.play().catch(()=>{}); } catch(e){} };
+  splash.innerHTML = `<span style="color:#ff6b6b">HAKAI</span><span style="color:#72ff72;margin-left:6px">WARE</span>`;
+  document.body.appendChild(splash);
+  requestAnimationFrame(()=> splash.style.opacity = '1');
 
-// safe find & click
-const findAndClickBySelector = selector => {
-  try {
-    const el = document.querySelector(selector);
-    if (el) {
-      el.click();
-      sendToast(`⭕ Pressionando ${selector}...`, 1000);
-      return true;
-    }
-  } catch(e){}
-  return false;
-};
+  // Hide splash after short moment
+  const hideSplash = async (ms=800) => {
+    await delay(ms);
+    splash.style.opacity = '0';
+    await delay(400);
+    try{ splash.remove(); }catch(e){}
+  };
 
-// sendToast (uses Toastify global)
-function sendToast(text, duration = 5000, gravity = 'bottom') {
-  if (typeof Toastify === 'function') {
-    Toastify({
-      text: text,
-      duration: duration,
-      gravity: gravity,
-      position: "center",
-      stopOnFocus: true,
-      style: { background: "#000000", color: "#ffffff", fontFamily: "MuseoSans, sans-serif" }
-    }).showToast();
-  } else {
-    // fallback
-    console.log('Toast:', text);
+  // --- Tiny EventEmitter ---
+  class EventEmitter{
+    constructor(){ this.events = {} }
+    on(ev, fn){ (this.events[ev] = this.events[ev] || []).push(fn); }
+    off(ev, fn){ if(!this.events[ev]) return; this.events[ev] = this.events[ev].filter(f=>f!==fn); }
+    emit(ev,...a){ (this.events[ev]||[]).forEach(f=>{ try{ f(...a);}catch(e){} }); }
   }
-}
+  const bus = new EventEmitter();
 
-// Splash screen
-async function showSplashScreen() {
-  splashScreen.style.cssText =
-    "position:fixed;top:0;left:0;width:100%;height:100%;background-color:#000;display:flex;align-items:center;justify-content:center;z-index:99999;opacity:0;transition:opacity 0.5s ease;user-select:none;color:white;font-family:MuseoSans,sans-serif;font-size:30px;text-align:center;";
-  splashScreen.innerHTML = '<span style="color:#ff6b6b;">HAKAI</span><span style="color:#72ff72;margin-left:6px;">WARE</span>';
-  document.body.appendChild(splashScreen);
-  setTimeout(() => splashScreen.style.opacity = '1', 10);
-}
+  // Mutation observer -> emit 'domChanged'
+  new MutationObserver((ml)=>{ bus.emit('domChanged', ml); })
+    .observe(document.body, { childList: true, subtree: true });
 
-async function hideSplashScreen() {
-  splashScreen.style.opacity = '0';
-  setTimeout(() => { try { splashScreen.remove(); } catch(e){} }, 1000);
-}
-
-// load external script & css helpers
-async function loadScript(url, label) {
-  const res = await fetch(url).then(r => r.text());
-  loadedPlugins.push(label || url);
-  // Evaluate - intentionally using indirect eval to keep global scope
-  (0, eval)(res);
-  return;
-}
-function loadCss(url) {
-  return new Promise(resolve => {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.type = 'text/css';
-    link.href = url;
-    link.onload = () => resolve();
-    document.head.appendChild(link);
-  });
-}
-
-// Main setup
-function setupMain() {
-  // phrases for question spoof
-  const phrases = [
-    "🔥 Get good, get HakaiWare!",
-    "🤍 Made by @im.nix.",
-    "☄️ By Niximkk/khanware.",
-    "🌟 Star the project on GitHub!",
-    "🪶 Lite mode @ HakaiWareMinimal.js"
-  ];
-
-  // Save original fetch once
-  const originalFetch = window.fetch.bind(window);
-
-  // Unified fetch wrapper
-  window.fetch = async function(input, init = {}) {
-    // read body if present
-    let bodyText = null;
+  // --- Load optional libs (DarkReader, Toastify) safely ---
+  async function loadOptionalAssets(){
+    // Toastify CSS + JS
     try {
-      if (input instanceof Request) {
-        // clone so we don't consume original
-        bodyText = await input.clone().text().catch(()=>null);
-      } else if (init && init.body) {
-        bodyText = init.body;
-        if (typeof bodyText !== 'string') {
-          try { bodyText = JSON.stringify(bodyText); } catch(e){}
-        }
-      }
-    } catch(e){}
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = 'https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css';
+      document.head.appendChild(css);
+      await delay(50);
+      await (async ()=>{ const s = document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/toastify-js'; document.head.appendChild(s); return new Promise(r=>s.onload=r); })();
+    } catch(e){ console.debug('Toastify load failed', e); }
 
-    // If request is video progress update - modify payload to mark watched
+    // DarkReader (optional)
     try {
-      if (bodyText && bodyText.includes('"operationName":"updateUserVideoProgress"')) {
-        try {
-          const bodyObj = JSON.parse(bodyText);
-          if (bodyObj.variables && bodyObj.variables.input) {
-            const durationSeconds = bodyObj.variables.input.durationSeconds;
-            bodyObj.variables.input.secondsWatched = durationSeconds;
-            bodyObj.variables.input.lastSecondWatched = durationSeconds;
-            const newBody = JSON.stringify(bodyObj);
-            if (input instanceof Request) {
-              input = new Request(input, { body: newBody, method: input.method, headers: input.headers, mode: input.mode, credentials: input.credentials, cache: input.cache });
-            } else {
-              init = Object.assign({}, init, { body: newBody });
-            }
-            sendToast("🔓 Vídeo exploitado (HakaiWare).", 1000);
-          }
-        } catch(e){
-          console.debug('HakaiWare videoSpoof error', e);
-        }
+      await (async ()=>{ const s = document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js'; document.head.appendChild(s); return new Promise(r=>s.onload=r); })();
+    } catch(e){ console.debug('DarkReader load failed', e); }
+  }
+
+  // Toast helper (safe; doesn't require automation)
+  function sendToast(text, duration=3000){
+    if (window.Toastify) {
+      Toastify({ text, duration, gravity: 'bottom', position: 'center', style: { background: '#000', color:'#fff', fontFamily:'MuseoSans, sans-serif' } }).showToast();
+    } else {
+      // fallback non-intrusive
+      console.log('HakaiWare toast:', text);
+    }
+  }
+
+  // --- UI Panel (safe toggles) ---
+  function createUIPanel(){
+    const panel = document.createElement('div');
+    panel.id = 'hakaiware-panel';
+    panel.style.cssText = [
+      'position:fixed','right:12px','bottom:12px','z-index:2147483646',
+      'background:#0b0b0bcc','color:#fff','padding:10px','border-radius:12px','font-family:MuseoSans, sans-serif',
+      'font-size:13px','min-width:160px','box-shadow:0 6px 18px rgba(0,0,0,.35)'
+    ].join(';');
+
+    panel.innerHTML = `
+      <div style="font-weight:700;margin-bottom:8px">HakaiWare • Safe</div>
+      <label style="display:block;margin-bottom:6px"><input type="checkbox" id="hw-darkreader"> Enable DarkReader</label>
+      <label style="display:block;margin-bottom:6px"><input type="checkbox" id="hw-scroll-styles" checked> Custom scrollbars</label>
+      <button id="hw-toast-test" style="margin-top:6px;width:100%">Test Toast</button>
+      <div style="font-size:11px;opacity:.8;margin-top:8px">Version: ${META.version}</div>
+    `;
+
+    document.body.appendChild(panel);
+
+    // wire controls
+    document.getElementById('hw-darkreader').addEventListener('change', (e)=>{
+      if (window.DarkReader && typeof DarkReader.enable === 'function'){
+        if (e.target.checked) { DarkReader.enable(); sendToast('DarkReader enabled'); }
+        else { DarkReader.disable(); sendToast('DarkReader disabled'); }
+      } else {
+        sendToast('DarkReader not available (not loaded)');
       }
-    } catch(e){}
+    });
 
-    // If request relates to conversions/minute farm and contains termination_event, block or neutralize
-    try {
-      // We use URL check if input is Request or string
-      const reqUrl = (input && input.url) ? input.url : (typeof input === 'string' ? input : '');
-      if (bodyText && reqUrl.includes("mark_conversions")) {
-        try {
-          if (bodyText.includes("termination_event")) {
-            sendToast("🚫 Limitador de tempo bloqueado (HakaiWare).", 1000);
-            // Return a minimal success Response to short-circuit (status 200 with empty body)
-            return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' }});
-          }
-        } catch(e){ console.debug('HakaiWare minuteFarm error', e); }
-      }
-    } catch(e){}
+    document.getElementById('hw-scroll-styles').addEventListener('change', (e)=>{
+      styleEl.textContent = e.target.checked ? styleEl.textContent.replace('/*hidden*/','') : '/*hidden*/';
+      sendToast('Scrollbar style '+(e.target.checked?'enabled':'disabled'));
+    });
 
-    // Call original fetch and optionally modify responses (QuestionSpoof)
-    const originalResponse = await originalFetch(input, init);
-    // Try to clone and examine JSON body for question spoof transformation
-    try {
-      // clone to read
-      const cloned = originalResponse.clone();
-      const text = await cloned.text();
-      if (text) {
-        try {
-          const responseObj = JSON.parse(text);
-          // path: responseObj.data.assessmentItem.item.itemData (as in original script)
-          if (responseObj?.data?.assessmentItem?.item?.itemData) {
-            let itemData = JSON.parse(responseObj.data.assessmentItem.item.itemData);
-            // only operate in the intended condition (some uppercase check from original)
-            if (itemData.question && itemData.question.content && itemData.question.content[0] === itemData.question.content[0].toUpperCase()) {
-              itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false };
-              itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + [[ "☃ radio 1" ]];
-              itemData.question.widgets = {
-                "radio 1": {
-                  type: "radio",
-                  options: {
-                    choices: [
-                      { content: "Resposta correta.", correct: true },
-                      { content: "Resposta incorreta.", correct: false }
-                    ]
-                  }
-                }
-              };
-              responseObj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
-              sendToast("🔓 Questão exploitada (HakaiWare).", 1000);
-              return new Response(JSON.stringify(responseObj), {
-                status: originalResponse.status,
-                statusText: originalResponse.statusText,
-                headers: originalResponse.headers
-              });
-            }
-          }
-        } catch(e){
-          // if JSON parse fails just ignore
-        }
-      }
-    } catch(e){ console.debug('HakaiWare response inspect error', e); }
+    document.getElementById('hw-toast-test').addEventListener('click', ()=> sendToast('Hello from HakaiWare Safe!'));
 
-    return originalResponse;
-  }; // end window.fetch wrapper
+    return panel;
+  }
 
-  // AutoAnswer / Auto clicker logic
-  (function autoAnswerLoop(){
-    const baseSelectors = [
-      '[data-testid="choice-icon__library-choice-icon"]',
-      '[data-testid="exercise-check-answer"]',
-      '[data-testid="exercise-next-question"]',
-      '._1udzurba',
-      '._awve9b'
-    ];
+  // --- Initialization ---
+  try {
+    await loadOptionalAssets();
+    await hideSplash(500);
+    createUIPanel();
+    sendToast('HakaiWare Safe carregado.');
+    console.info(`${META.name} v${META.version} (safe) loaded`);
+  } catch(e){
+    console.error('HakaiWareSafe error', e);
+    try { hideSplash(); } catch(e){}
+  }
 
-    let hakaiDominates = true;
-
-    (async () => {
-      while (hakaiDominates) {
-        const selectorsToCheck = [...baseSelectors];
-        for (const q of selectorsToCheck) {
-          findAndClickBySelector(q);
-          try {
-            const summaryEl = document.querySelector(q + " > div");
-            if (summaryEl && summaryEl.innerText === "Mostrar resumo") {
-              sendToast("🎉 Exercício concluído!", 3000);
-              playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
-            }
-          } catch(e){}
-        }
-        await delay(800);
-      }
-    })();
-  })();
-
-} // end setupMain
-
-// Inject guard: only run on Khan Academy (keeps original behavior)
-if (!/^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/i.test(window.location.href)) {
-  alert("❌ HakaiWare Failed to Inject!\n\nVocê precisa executar o HakaiWare no site do Khan Academy! (https://pt.khanacademy.org/)");
+})();t.khanacademy.org/)");
   window.location.href = "https://pt.khanacademy.org/";
 }
 
