@@ -1,75 +1,289 @@
-/* HakaiWare Minimal - Inject script (versão final) Use: Cole no console do navegador em https://pt.khanacademy.org/ ou crie um bookmarklet. Alterações: nome de exibição "HakaiWare", interceptores unificados, integração Toastify + DarkReader, auto-responder, video spoof, minute farm. */
+// == HakaiWare Minimal Injector ==
+// Copiar / colar no console do navegador (ou userscript)
 
-(() => { 'use strict';
+// Config
+let loadedPlugins = [];
 
-/* ---------- Config ---------- */ const DISPLAY_NAME = 'HAKAIWARE'; const AUDIO_SUCCESS = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav'; const AUDIO_INJECT = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav'; const FONT_TTF = 'https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf'; const ICON_PNG = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png';
+// Element(s)
+const splashScreen = document.createElement('div');
 
-/* ---------- Globals ---------- */ let loadedPlugins = []; const splashScreen = document.createElement('div'); const handlers = [];
+// Styles (font + scrollbars)
+document.head.appendChild(Object.assign(document.createElement("style"), {
+  innerHTML: `
+@font-face {
+  font-family: 'MuseoSans';
+  src: url('https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf') format('truetype');
+}
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
+`
+}}));
 
-/* ---------- Utilities ---------- */ const delay = ms => new Promise(r => setTimeout(r, ms)); const safeJson = s => { try { return JSON.parse(s); } catch(e){ return null; } }; const playAudio = url => { try { const a = new Audio(url); a.play(); } catch(e){} };
+// change favicon safely if exists
+try { const ico = document.querySelector("link[rel~='icon']"); if (ico) ico.href = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png'; } catch(e){}
 
-function sendToast(text, duration = 4000) { if (window.Toastify) Toastify({ text, duration, gravity: 'bottom', position: 'center', stopOnFocus: true, style: { background: '#000' } }).showToast(); else console.info(DISPLAY_NAME + ' toast:', text); }
+// Simple EventEmitter
+class EventEmitter {
+  constructor(){ this.events = {} }
+  on(t, e){ if (typeof t === 'string') t = [t]; t.forEach(k => { this.events[k] = this.events[k] || []; this.events[k].push(e); }) }
+  off(t, e){ if (typeof t === 'string') t = [t]; t.forEach(k => { if (this.events[k]) this.events[k] = this.events[k].filter(fn => fn !== e) }) }
+  emit(t, ...a){ (this.events[t]||[]).forEach(fn => fn(...a)) }
+  once(t,e){ const s = (...i)=>{ e(...i); this.off(t,s) }; this.on(t,s) }
+}
+const plppdo = new EventEmitter();
 
-function findAndClick(selector) { try { const el = document.querySelector(selector); if (el) { el.click(); sendToast(⭕ Pressionando ${selector}..., 1000); return true; } } catch(e){} return false; }
+// Mutation observer to emit domChanged
+new MutationObserver((mutationsList) => {
+  for (let mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged');
+}).observe(document.body, { childList: true, subtree: true });
 
-/* ---------- UI: Splash, styles ---------- */ (function applyStylesAndIcon(){ try { const font = document.createElement('style'); font.innerHTML = @font-face{font-family: 'MuseoSans'; src: url('${FONT_TTF}') format('truetype');}; document.head.appendChild(font);
+// Utility functions
+const delay = ms => new Promise(r => setTimeout(r, ms));
+const playAudio = url => { try { const a = new Audio(url); a.play().catch(()=>{}); } catch(e){} };
 
-const scrollbar = document.createElement('style');
-  scrollbar.innerHTML = `::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-track{background:#f1f1f1} ::-webkit-scrollbar-thumb{background:#888;border-radius:10px} ::-webkit-scrollbar-thumb:hover{background:#555}`;
-  document.head.appendChild(scrollbar);
-
-  const ico = document.querySelector("link[rel~='icon']");
-  if (ico) ico.href = ICON_PNG;
-} catch(e){ console.warn(DISPLAY_NAME, 'applyStyles error', e); }
-
-})();
-
-async function showSplash() { try { splashScreen.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;z-index:999999;color:#fff;font-family:MuseoSans,sans-serif;font-size:28px;opacity:0;transition:opacity .3s'; splashScreen.innerHTML = <div><span style="color:#fff">HAKAI</span><span style="color:#72ff72">WARE</span></div>; document.body.appendChild(splashScreen); await delay(20); splashScreen.style.opacity = '1'; } catch(e){} } async function hideSplash() { try{ splashScreen.style.opacity = '0'; await delay(600); splashScreen.remove(); } catch(e){} }
-
-/* ---------- Load externals (Toastify + DarkReader) ---------- */ async function loadExternal() { await loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css'); await loadScript('https://cdn.jsdelivr.net/npm/toastify-js'); // DarkReader is optional await loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js'); if (window.DarkReader && window.DarkReader.enable) { try { DarkReader.setFetchMethod(window.fetch); DarkReader.enable(); } catch(e){} } sendToast('🪶 ' + DISPLAY_NAME + ' injetado com sucesso!'); playAudio(AUDIO_INJECT); }
-
-function loadScript(url) { return new Promise(resolve => { try { const s = document.createElement('script'); s.src = url; s.onload = () => { loadedPlugins.push(url); resolve(); }; s.onerror = () => resolve(); document.head.appendChild(s); } catch(e){ resolve(); } }); } function loadCss(url) { return new Promise(resolve => { try { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = url; l.onload = () => resolve(); l.onerror = () => resolve(); document.head.appendChild(l); } catch(e){ resolve(); } }); }
-
-/* ---------- Fetch interceptor framework ---------- */ (function installFetchInterceptor(){ const originalFetch = window.fetch.bind(window);
-
-// handlers can examine/modify req (input/init) and response
-// handlers: { onRequest?: async({input, init, bodyText}) => ({input, init}) , onResponse?: async({response, responseText}) => ({responseText, shortCircuit}) }
-
-async function readRequestBody(input, init) {
+// safe find & click
+const findAndClickBySelector = selector => {
   try {
-    if (input instanceof Request) return await input.clone().text();
-    if (init && init.body) return init.body;
+    const el = document.querySelector(selector);
+    if (el) {
+      el.click();
+      sendToast(`⭕ Pressionando ${selector}...`, 1000);
+      return true;
+    }
   } catch(e){}
-  return null;
+  return false;
+};
+
+// sendToast (uses Toastify global)
+function sendToast(text, duration = 5000, gravity = 'bottom') {
+  if (typeof Toastify === 'function') {
+    Toastify({
+      text: text,
+      duration: duration,
+      gravity: gravity,
+      position: "center",
+      stopOnFocus: true,
+      style: { background: "#000000", color: "#ffffff", fontFamily: "MuseoSans, sans-serif" }
+    }).showToast();
+  } else {
+    // fallback
+    console.log('Toast:', text);
+  }
 }
 
-async function readResponseText(response) {
-  try { return await response.clone().text(); } catch(e) { return null; }
+// Splash screen
+async function showSplashScreen() {
+  splashScreen.style.cssText =
+    "position:fixed;top:0;left:0;width:100%;height:100%;background-color:#000;display:flex;align-items:center;justify-content:center;z-index:99999;opacity:0;transition:opacity 0.5s ease;user-select:none;color:white;font-family:MuseoSans,sans-serif;font-size:30px;text-align:center;";
+  splashScreen.innerHTML = '<span style="color:#ff6b6b;">HAKAI</span><span style="color:#72ff72;margin-left:6px;">WARE</span>';
+  document.body.appendChild(splashScreen);
+  setTimeout(() => splashScreen.style.opacity = '1', 10);
 }
 
-// add specific handlers
+async function hideSplashScreen() {
+  splashScreen.style.opacity = '0';
+  setTimeout(() => { try { splashScreen.remove(); } catch(e){} }, 1000);
+}
 
-// VideoSpoof: if outgoing request body contains operationName updateUserVideoProgress, set secondsWatched to durationSeconds
-handlers.push({
-  async onRequest({input, init, bodyText}){
-    try{
-      const url = (input && input.url) ? input.url : (typeof input === 'string' ? input : '');
-      if (bodyText && bodyText.includes('"operationName":"updateUserVideoProgress"')){
-        const obj = safeJson(bodyText);
-        if (obj && obj.variables && obj.variables.input && typeof obj.variables.input.durationSeconds === 'number'){
-          obj.variables.input.secondsWatched = obj.variables.input.durationSeconds;
-          obj.variables.input.lastSecondWatched = obj.variables.input.durationSeconds;
-          const newBody = JSON.stringify(obj);
-          if (input instanceof Request) input = new Request(input, { ...input, body: newBody });
-          else init = { ...(init||{}), body: newBody };
-          sendToast('🔓 Vídeo exploitado.', 1000);
-          return { input, init };
+// load external script & css helpers
+async function loadScript(url, label) {
+  const res = await fetch(url).then(r => r.text());
+  loadedPlugins.push(label || url);
+  // Evaluate - intentionally using indirect eval to keep global scope
+  (0, eval)(res);
+  return;
+}
+function loadCss(url) {
+  return new Promise(resolve => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.type = 'text/css';
+    link.href = url;
+    link.onload = () => resolve();
+    document.head.appendChild(link);
+  });
+}
+
+// Main setup
+function setupMain() {
+  // phrases for question spoof
+  const phrases = [
+    "🔥 Get good, get HakaiWare!",
+    "🤍 Made by @im.nix.",
+    "☄️ By Niximkk/khanware.",
+    "🌟 Star the project on GitHub!",
+    "🪶 Lite mode @ HakaiWareMinimal.js"
+  ];
+
+  // Save original fetch once
+  const originalFetch = window.fetch.bind(window);
+
+  // Unified fetch wrapper
+  window.fetch = async function(input, init = {}) {
+    // read body if present
+    let bodyText = null;
+    try {
+      if (input instanceof Request) {
+        // clone so we don't consume original
+        bodyText = await input.clone().text().catch(()=>null);
+      } else if (init && init.body) {
+        bodyText = init.body;
+        if (typeof bodyText !== 'string') {
+          try { bodyText = JSON.stringify(bodyText); } catch(e){}
         }
       }
-    }catch(e){console.warn(DISPLAY_NAME,'videoSpoof',e)}
-    return null;
+    } catch(e){}
+
+    // If request is video progress update - modify payload to mark watched
+    try {
+      if (bodyText && bodyText.includes('"operationName":"updateUserVideoProgress"')) {
+        try {
+          const bodyObj = JSON.parse(bodyText);
+          if (bodyObj.variables && bodyObj.variables.input) {
+            const durationSeconds = bodyObj.variables.input.durationSeconds;
+            bodyObj.variables.input.secondsWatched = durationSeconds;
+            bodyObj.variables.input.lastSecondWatched = durationSeconds;
+            const newBody = JSON.stringify(bodyObj);
+            if (input instanceof Request) {
+              input = new Request(input, { body: newBody, method: input.method, headers: input.headers, mode: input.mode, credentials: input.credentials, cache: input.cache });
+            } else {
+              init = Object.assign({}, init, { body: newBody });
+            }
+            sendToast("🔓 Vídeo exploitado (HakaiWare).", 1000);
+          }
+        } catch(e){
+          console.debug('HakaiWare videoSpoof error', e);
+        }
+      }
+    } catch(e){}
+
+    // If request relates to conversions/minute farm and contains termination_event, block or neutralize
+    try {
+      // We use URL check if input is Request or string
+      const reqUrl = (input && input.url) ? input.url : (typeof input === 'string' ? input : '');
+      if (bodyText && reqUrl.includes("mark_conversions")) {
+        try {
+          if (bodyText.includes("termination_event")) {
+            sendToast("🚫 Limitador de tempo bloqueado (HakaiWare).", 1000);
+            // Return a minimal success Response to short-circuit (status 200 with empty body)
+            return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' }});
+          }
+        } catch(e){ console.debug('HakaiWare minuteFarm error', e); }
+      }
+    } catch(e){}
+
+    // Call original fetch and optionally modify responses (QuestionSpoof)
+    const originalResponse = await originalFetch(input, init);
+    // Try to clone and examine JSON body for question spoof transformation
+    try {
+      // clone to read
+      const cloned = originalResponse.clone();
+      const text = await cloned.text();
+      if (text) {
+        try {
+          const responseObj = JSON.parse(text);
+          // path: responseObj.data.assessmentItem.item.itemData (as in original script)
+          if (responseObj?.data?.assessmentItem?.item?.itemData) {
+            let itemData = JSON.parse(responseObj.data.assessmentItem.item.itemData);
+            // only operate in the intended condition (some uppercase check from original)
+            if (itemData.question && itemData.question.content && itemData.question.content[0] === itemData.question.content[0].toUpperCase()) {
+              itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false };
+              itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + [[ "☃ radio 1" ]];
+              itemData.question.widgets = {
+                "radio 1": {
+                  type: "radio",
+                  options: {
+                    choices: [
+                      { content: "Resposta correta.", correct: true },
+                      { content: "Resposta incorreta.", correct: false }
+                    ]
+                  }
+                }
+              };
+              responseObj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+              sendToast("🔓 Questão exploitada (HakaiWare).", 1000);
+              return new Response(JSON.stringify(responseObj), {
+                status: originalResponse.status,
+                statusText: originalResponse.statusText,
+                headers: originalResponse.headers
+              });
+            }
+          }
+        } catch(e){
+          // if JSON parse fails just ignore
+        }
+      }
+    } catch(e){ console.debug('HakaiWare response inspect error', e); }
+
+    return originalResponse;
+  }; // end window.fetch wrapper
+
+  // AutoAnswer / Auto clicker logic
+  (function autoAnswerLoop(){
+    const baseSelectors = [
+      '[data-testid="choice-icon__library-choice-icon"]',
+      '[data-testid="exercise-check-answer"]',
+      '[data-testid="exercise-next-question"]',
+      '._1udzurba',
+      '._awve9b'
+    ];
+
+    let hakaiDominates = true;
+
+    (async () => {
+      while (hakaiDominates) {
+        const selectorsToCheck = [...baseSelectors];
+        for (const q of selectorsToCheck) {
+          findAndClickBySelector(q);
+          try {
+            const summaryEl = document.querySelector(q + " > div");
+            if (summaryEl && summaryEl.innerText === "Mostrar resumo") {
+              sendToast("🎉 Exercício concluído!", 3000);
+              playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
+            }
+          } catch(e){}
+        }
+        await delay(800);
+      }
+    })();
+  })();
+
+} // end setupMain
+
+// Inject guard: only run on Khan Academy (keeps original behavior)
+if (!/^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/i.test(window.location.href)) {
+  alert("❌ HakaiWare Failed to Inject!\n\nVocê precisa executar o HakaiWare no site do Khan Academy! (https://pt.khanacademy.org/)");
+  window.location.href = "https://pt.khanacademy.org/";
+}
+
+// Boot sequence: show splash, load plugins, init
+(async () => {
+  try {
+    await showSplashScreen();
+    // Load DarkReader, Toastify CSS + Toastify
+    await loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin');
+    // let DarkReader set fetch method later after our fetch wrapper exists; we set it after enabling
+    loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css', 'toastifyCss');
+    await loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin');
+
+    sendToast("🪶 HakaiWare Minimal injetado com sucesso!");
+    playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+    await delay(500);
+
+    setupMain();
+
+    // if DarkReader exists, configure to use our fetch wrapper (if any)
+    try { if (typeof DarkReader !== 'undefined' && typeof DarkReader.setFetchMethod === 'function') DarkReader.setFetchMethod(window.fetch); if (typeof DarkReader !== 'undefined' && typeof DarkReader.enable === 'function') DarkReader.enable(); } catch(e){}
+
+    await hideSplashScreen();
+    console.clear();
+  } catch (err) {
+    console.error('HakaiWare injector error', err);
+    try { hideSplashScreen(); } catch(e){}
   }
-});
+})();});
 
 // MinuteFarm: block termination_event in mark_conversions requests
 handlers.push({
