@@ -1,74 +1,250 @@
-let loadedPlugins = [];
+(function() {
+    'use strict'; // Modo estrito para evitar erros globais
 
-/* Element(s?) */
-const splashScreen = document.createElement('div');
-splashScreen.className = 'hakai-splash';
+    let loadedPlugins = [];
 
-/* Misc Styles */
-document.head.appendChild(Object.assign(document.createElement("style"), {
-    innerHTML: "@font-face{font-family:'MuseoSans';src:url('https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf') format('truetype')}"
-}));
-document.head.appendChild(Object.assign(document.createElement('style'), {
-    innerHTML: "::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #f1f1f1; } ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #555; }"
-}));
-const existingFavicon = document.querySelector("link[rel~='icon']");
-if (existingFavicon) existingFavicon.href = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png';
+    /* Element(s?) */
+    const splashScreen = document.createElement('div');
+    splashScreen.className = 'hakai-splash';
 
-/* EventEmitter */
-class EventEmitter {
-    constructor() { this.events = {}; }
-    on(t, e) { if (typeof t === 'string') t = [t]; t.forEach(t => { this.events[t] || (this.events[t] = []); this.events[t].push(e); }); }
-    off(t, e) { if (typeof t === 'string') t = [t]; t.forEach(t => { this.events[t] && (this.events[t] = this.events[t].filter(x => x !== e)); }); }
-    emit(t, ...e) { this.events[t] && this.events[t].forEach(fn => fn(...e)); }
-    once(t, e) { if (typeof t === 'string') t = [t]; let s = (...i) => { e(...i); this.off(t, s); }; this.on(t, s); }
-}
-const plppdo = new EventEmitter();
-new MutationObserver((mutationsList) => {
-    for (let mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged');
-}).observe(document.body, { childList: true, subtree: true });
+    /* Misc Styles */
+    document.head.appendChild(Object.assign(document.createElement("style"), {
+        innerHTML: "@font-face{font-family:'MuseoSans';src:url('https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf') format('truetype')}"
+    }));
+    document.head.appendChild(Object.assign(document.createElement('style'), {
+        innerHTML: "::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #f1f1f1; } ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #555; }"
+    }));
+    const existingFavicon = document.querySelector("link[rel~='icon']");
+    if (existingFavicon) existingFavicon.href = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png';
 
-/* Misc Functions */
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const playAudio = url => {
-    try {
-        const audio = new Audio(url);
-        audio.play().catch(e => {}); // Ignora erros de autoplay no mobile
-    } catch (e) {}
-};
-const findAndClickBySelector = selector => {
-    const element = document.querySelector(selector);
-    if (element) {
-        element.click();
-        sendToast(`⭕ Pressionando ${selector}...`, 1000);
-        return true;
+    /* EventEmitter */
+    class EventEmitter {
+        constructor() { this.events = {}; }
+        on(t, e) { if (typeof t === 'string') t = [t]; t.forEach(t => { this.events[t] || (this.events[t] = []); this.events[t].push(e); }); }
+        off(t, e) { if (typeof t === 'string') t = [t]; t.forEach(t => { this.events[t] && (this.events[t] = this.events[t].filter(x => x !== e)); }); }
+        emit(t, ...e) { this.events[t] && this.events[t].forEach(fn => fn(...e)); }
+        once(t, e) { if (typeof t === 'string') t = [t]; let s = (...i) => { e(...i); this.off(t, s); }; this.on(t, s); }
     }
-    return false;
-};
-function sendToast(text, duration = 5000, gravity = 'bottom') {
-    if (typeof Toastify !== 'undefined') {
-        Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
+    const plppdo = new EventEmitter();
+    new MutationObserver((mutationsList) => {
+        for (let mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged');
+    }).observe(document.body, { childList: true, subtree: true });
+
+    /* Misc Functions */
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const playAudio = url => {
+        try {
+            const audio = new Audio(url);
+            audio.play().catch(e => {});
+        } catch (e) {}
+    };
+    const findAndClickBySelector = selector => {
+        const element = document.querySelector(selector);
+        if (element) {
+            element.click();
+            sendToast(`⭕ Pressionando ${selector}...`, 1000);
+            return true;
+        }
+        return false;
+    };
+    function sendToast(text, duration = 5000, gravity = 'bottom') {
+        if (typeof Toastify !== 'undefined') {
+            Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
+        } else {
+            alert(`[HAKAI]: ${text}`);
+            console.log(`[HAKAI]: ${text}`);
+        }
+    }
+
+    async function showSplashScreen() {
+        splashScreen.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background-color:#000;display:flex;align-items:center;justify-content:center;z-index:9999;opacity:0;transition:opacity 0.5s ease;user-select:none;color:white;font-family:MuseoSans,sans-serif;font-size:30px;text-align:center;";
+        splashScreen.innerHTML = '<span style="color:white;">HAKAI</span><span style="color:#ff7272;">.SPACE</span>';
+        document.body.appendChild(splashScreen);
+        setTimeout(() => splashScreen.style.opacity = '1', 10);
+    }
+    async function hideSplashScreen() {
+        splashScreen.style.opacity = '0';
+        setTimeout(() => splashScreen.remove(), 1000);
+    }
+
+    async function loadScript(url, label) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const script = await response.text();
+            loadedPlugins.push(label);
+            eval(script);
+            return true;
+        } catch (e) {
+            console.error(`[HAKAI] Failed to load ${label}:`, e);
+            return false;
+        }
+    }
+    async function loadCss(url) {
+        return new Promise(resolve => {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.type = 'text/css';
+            link.href = url;
+            link.onload = () => resolve(true);
+            link.onerror = () => resolve(false);
+            document.head.appendChild(link);
+        });
+    }
+
+    /* Main Functions */
+    function setupMain() {
+        const phrases = [
+            "🔥 Get good, get HAKAI!",
+            "🤍 Made by @hakai0fc",
+            "☄️ By Hakai0fc/Khan.",
+            "🌟 Star the project on GitHub!",
+            "🪶 Lite mode @ HakaiMinimal.js",
+        ];
+
+        // ÚNICA interceptação de fetch
+        const originalFetch = window.fetch;
+        window.fetch = async function(input, init = {}) {
+            let body = null;
+            if (input instanceof Request) {
+                body = await input.clone().text();
+            } else if (init.body) {
+                body = typeof init.body === 'string' ? init.body : new TextDecoder().decode(init.body);
+            }
+
+            const args = arguments;
+
+            // QuestionSpoof
+            if (body && body.includes('assessmentItem')) {
+                try {
+                    const response = await originalFetch.apply(this, args);
+                    const clonedResponse = response.clone();
+                    const responseBody = await clonedResponse.text();
+                    let responseObj;
+                    try {
+                        responseObj = JSON.parse(responseBody);
+                    } catch {}
+                    if (responseObj?.data?.assessmentItem?.item?.itemData) {
+                        let itemData;
+                        try {
+                            itemData = JSON.parse(responseObj.data.assessmentItem.item.itemData);
+                        } catch {}
+                        if (itemData && itemData.question && itemData.question.content[0] === itemData.question.content[0].toUpperCase()) {
+                            itemData.answerArea = { calculator: false, chi2Table: false, periodicTable: false, tTable: false, zTable: false };
+                            itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + `[[☃ radio 1]]`;
+                            itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [{ content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false }] } } };
+                            responseObj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+                            sendToast("🔓 Questão exploitada.", 1000);
+                            return new Response(JSON.stringify(responseObj), { status: response.status, statusText: response.statusText, headers: response.headers });
+                        }
+                    }
+                    return response;
+                } catch (e) {
+                    console.debug('QuestionSpoof error:', e);
+                }
+            }
+
+            // VideoSpoof
+            if (body && body.includes('updateUser VideoProgress')) {  // Corrigi o nome da operação (era "VideoProgress" sem espaço)
+                try {
+                    let bodyObj = JSON.parse(body);
+                    if (bodyObj.variables && bodyObj.variables.input) {
+                        const durationSeconds = bodyObj.variables.input.durationSeconds;
+                        bodyObj.variables.input.secondsWatched = durationSeconds;
+                        bodyObj.variables.input.lastSecondWatched = durationSeconds;
+                        const newBody = JSON.stringify(bodyObj);
+                        if (input instanceof Request) {
+                            input = new Request(input, { body: newBody });
+                        } else {
+                            init.body = newBody;
+                        }
+                        sendToast("🔓 Vídeo exploitado.", 1000);
+                    }
+                } catch (e) {
+                    console.debug('VideoSpoof error:', e);
+                }
+            }
+
+            // MinuteFarm
+            if (body && (input.url || '').includes("mark_conversions")) {
+                try {
+                    if (body.includes("termination_event")) {
+                        sendToast("🚫 Limitador de tempo bloqueado.", 1000);
+                        return new Response(null, { status: 200 });  // Isso está dentro da função, ok
+                    }
+                } catch (e) {
+                    console.debug('MinuteFarm error:', e);
+                }
+            }
+
+            return originalFetch.apply(this, args);
+        };
+
+        // AutoAnswer
+        const baseSelectors = [
+            `[data-testid="choice-icon__library-choice-icon"]`,
+            `[data-testid="exercise-check-answer"]`,
+            `[data-testid="exercise-next-question"]`,
+            `._1udzurba`,
+            `._awve9b`,
+            `button[data-testid="kaButton"]:not([disabled])`,
+            `.ExerciseController button[role="button"]`,
+            `[data-testid="radio-choice"]`
+        ];
+
+        let autoAnswerRunning = true;
+        plppdo.on('domChanged', () => {
+            if (!autoAnswerRunning) return;  // Isso está dentro da função on, ok
+            let clicked = false;
+            for (const q of baseSelectors) {
+                if (findAndClickBySelector(q)) clicked = true;
+            }
+            const summaryElement = document.querySelector('.ExerciseController-summary, [class*="summary"]');
+            if (summaryElement && summaryElement.innerText && summaryElement.innerText.includes("resumo")) {
+                sendToast("🎉 Exercício concluído!", 3000);
+                playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
+                autoAnswerRunning = false;
+            }
+            if (clicked) console.log('[HAKAI] AutoAnswer clicou algo.');
+        });
+
+        console.log('[HAKAI] SetupMain carregado!');
+    }
+
+    /* Inject Check - SEM RETURN, só if/else */
+    const khanRegex = /^https?:\/\/([a-z0-9-]+\.)?(pt\.)?khanacademy\.org/;
+    if (!khanRegex.test(window.location.href)) {
+        alert("❌ HAKAI Failed to Inject!\nVocê precisa executar HAKAI no site do Khan Academy!");
+        window.location.href = "https://pt.khanacademy.org/";
     } else {
-        // Fallback para mobile: alert simples
-        alert(`[HAKAI]: ${text}`);
-        console.log(`[HAKAI]: ${text}`);
+        showSplashScreen();
+
+        Promise.all([
+            loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin').catch(() => false),
+            loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css').catch(() => false),
+            loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin').catch(() => false)
+        ]).then(async () => {
+            if (typeof DarkReader !== 'undefined') {
+                try {
+                    DarkReader.setFetchMethod(window.fetch);
+                    DarkReader.enable();
+                } catch (e) {
+                    console.debug('DarkReader falhou:', e);
+                }
+            }
+            sendToast("🪶 HAKAI Minimal injetado com sucesso!");
+            playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+            await delay(500);
+            hideSplashScreen();
+            setupMain();
+        }).catch(e => {
+            console.error('[HAKAI] Erro no load:', e);
+            alert('[HAKAI] Dependências falharam, mas hacks ativados.');
+            hideSplashScreen();
+            setupMain();
+        });
     }
-}
-
-async function showSplashScreen() {
-    splashScreen.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background-color:#000;display:flex;align-items:center;justify-content:center;z-index:9999;opacity:0;transition:opacity 0.5s ease;user-select:none;color:white;font-family:MuseoSans,sans-serif;font-size:30px;text-align:center;";
-    splashScreen.innerHTML = '<span style="color:white;">HAKAI</span><span style="color:#ff7272;">.SPACE</span>';
-    document.body.appendChild(splashScreen);
-    setTimeout(() => splashScreen.style.opacity = '1', 10);
-}
-async function hideSplashScreen() {
-    splashScreen.style.opacity = '0';
-    setTimeout(() => splashScreen.remove(), 1000);
-}
-
-async function loadScript(url, label) {
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+})();
         const script = await response.text();
         loadedPlugins.push(label);
         eval(script);
