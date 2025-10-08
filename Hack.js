@@ -32,8 +32,8 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const playAudio = url => {
     try {
         const audio = new Audio(url);
-        audio.play().catch(e => console.debug('Audio play failed:', e)); // Silencia erros de autoplay
-    } catch (e) { console.debug('Audio creation failed:', e); }
+        audio.play().catch(e => {}); // Ignora erros de autoplay no mobile
+    } catch (e) {}
 };
 const findAndClickBySelector = selector => {
     const element = document.querySelector(selector);
@@ -48,7 +48,9 @@ function sendToast(text, duration = 5000, gravity = 'bottom') {
     if (typeof Toastify !== 'undefined') {
         Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
     } else {
-        console.log(`[HAKAI Toast]: ${text}`); // Fallback se Toastify não carregou
+        // Fallback para mobile: alert simples
+        alert(`[HAKAI]: ${text}`);
+        console.log(`[HAKAI]: ${text}`);
     }
 }
 
@@ -69,6 +71,180 @@ async function loadScript(url, label) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const script = await response.text();
         loadedPlugins.push(label);
+        eval(script);
+        return true;
+    } catch (e) {
+        console.error(`[HAKAI] Failed to load ${label}:`, e);
+        return false;
+    }
+}
+async function loadCss(url) {
+    return new Promise(resolve => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = url;
+        link.onload = () => resolve(true);
+        link.onerror = () => resolve(false);
+        document.head.appendChild(link);
+    });
+}
+
+/* Main Functions */
+function setupMain() {
+    const phrases = [
+        "🔥 Get good, get HAKAI!",
+        "🤍 Made by @hakai0fc",
+        "☄️ By Hakai0fc/Khan.",
+        "🌟 Star the project on GitHub!",
+        "🪶 Lite mode @ HakaiMinimal.js",
+    ];
+
+    // ÚNICA interceptação de fetch
+    const originalFetch = window.fetch;
+    window.fetch = async function(input, init = {}) {
+        let body = null;
+        if (input instanceof Request) {
+            body = await input.clone().text();
+        } else if (init.body) {
+            body = typeof init.body === 'string' ? init.body : new TextDecoder().decode(init.body);
+        }
+
+        // QuestionSpoof
+        const args = arguments;
+        if (body && body.includes('assessmentItem')) {
+            try {
+                const response = await originalFetch.apply(this, args);
+                const clonedResponse = response.clone();
+                const responseBody = await clonedResponse.text();
+                let responseObj;
+                try {
+                    responseObj = JSON.parse(responseBody);
+                } catch {} // Ignora parse errors
+                if (responseObj?.data?.assessmentItem?.item?.itemData) {
+                    let itemData;
+                    try {
+                        itemData = JSON.parse(responseObj.data.assessmentItem.item.itemData);
+                    } catch {}
+                    if (itemData && itemData.question && itemData.question.content[0] === itemData.question.content[0].toUpperCase()) {
+                        itemData.answerArea = { calculator: false, chi2Table: false, periodicTable: false, tTable: false, zTable: false };
+                        itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + `[[☃ radio 1]]`;
+                        itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [{ content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false }] } } };
+                        responseObj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+                        sendToast("🔓 Questão exploitada.", 1000);
+                        return new Response(JSON.stringify(responseObj), { status: response.status, statusText: response.statusText, headers: response.headers });
+                    }
+                }
+                return response;
+            } catch (e) {
+                console.debug('QuestionSpoof error:', e);
+            }
+        }
+
+        // VideoSpoof
+        if (body && body.includes('updateUser VideoProgress')) {
+            try {
+                let bodyObj = JSON.parse(body);
+                if (bodyObj.variables && bodyObj.variables.input) {
+                    const durationSeconds = bodyObj.variables.input.durationSeconds;
+                    bodyObj.variables.input.secondsWatched = durationSeconds;
+                    bodyObj.variables.input.lastSecondWatched = durationSeconds;
+                    const newBody = JSON.stringify(bodyObj);
+                    if (input instanceof Request) {
+                        input = new Request(input, { body: newBody });
+                    } else {
+                        init.body = newBody;
+                    }
+                    sendToast("🔓 Vídeo exploitado.", 1000);
+                }
+            } catch (e) {
+                console.debug('VideoSpoof error:', e);
+            }
+        }
+
+        // MinuteFarm
+        if (body && (input.url || '').includes("mark_conversions")) {
+            try {
+                if (body.includes("termination_event")) {
+                    sendToast("🚫 Limitador de tempo bloqueado.", 1000);
+                    return new Response(null, { status: 200 });
+                }
+            } catch (e) {
+                console.debug('MinuteFarm error:', e);
+            }
+        }
+
+        return originalFetch.apply(this, args);
+    };
+
+    // AutoAnswer
+    const baseSelectors = [
+        `[data-testid="choice-icon__library-choice-icon"]`,
+        `[data-testid="exercise-check-answer"]`,
+        `[data-testid="exercise-next-question"]`,
+        `._1udzurba`,
+        `._awve9b`,
+        `button[data-testid="kaButton"]:not([disabled])`,
+        `.ExerciseController button[role="button"]`,
+        `[data-testid="radio-choice"]`
+    ];
+
+    let autoAnswerRunning = true;
+    plppdo.on('domChanged', () => {
+        if (!autoAnswerRunning) return;
+        let clicked = false;
+        for (const q of baseSelectors) {
+            if (findAndClickBySelector(q)) clicked = true;
+            const summaryElement = document.querySelector('.ExerciseController-summary, [class*="summary"]');
+            if (summaryElement && summaryElement.innerText && summaryElement.innerText.includes("resumo")) {
+                sendToast("🎉 Exercício concluído!", 3000);
+                playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
+                autoAnswerRunning = false;
+                break;
+            }
+        }
+        if (clicked) console.log('[HAKAI] AutoAnswer clicou algo.');
+    });
+
+    console.log('[HAKAI] SetupMain carregado no mobile!');
+}
+
+/* Inject Check - SEM RETURN ILEGAL */
+const khanRegex = /^https?:\/\/([a-z0-9-]+\.)?(pt\.)?khanacademy\.org/;
+if (!khanRegex.test(window.location.href)) {
+    alert("❌ HAKAI Failed to Inject!\nVocê precisa executar HAKAI no site do Khan Academy!");
+    window.location.href = "https://pt.khanacademy.org/";
+} else {
+    // Só roda se for Khan
+    showSplashScreen();
+
+    // Carrega dependências com fallbacks
+    Promise.all([
+        loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin').catch(() => false),
+        loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css').catch(() => false),
+        loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin').catch(() => false)
+    ]).then(async () => {
+        // DarkReader opcional
+        if (typeof DarkReader !== 'undefined') {
+            try {
+                DarkReader.setFetchMethod(window.fetch);
+                DarkReader.enable();
+            } catch (e) {
+                console.debug('DarkReader falhou no mobile:', e);
+            }
+        }
+        sendToast("🪶 HAKAI Minimal injetado com sucesso!");
+        playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+        await delay(500);
+        hideSplashScreen();
+        setupMain();
+    }).catch(e => {
+        console.error('[HAKAI] Erro no load:', e);
+        alert('[HAKAI] Erro no carregamento, mas hacks básicos ativados.');
+        hideSplashScreen();
+        setupMain(); // Roda hacks mesmo sem dependências
+    });
+}
         eval(script); // Use com cuidado; considere Function() para mais segurança
         return true;
     } catch (e) {
