@@ -1,75 +1,446 @@
-/* ----------------------------- Khanware Enhanced ----------------------------- */
+/* ====================== KhanwareMinimal (corrigido) ====================== */
+/* Versão corrigida: fetch interceptor, injeção segura, robustez geral. */
 
-let loadedPlugins = [];
+(() => {
+  'use strict';
 
-/* ----------------------------- Splash Screen ----------------------------- */
-class SplashScreen {
-    constructor() {
-        this.el = document.createElement('div');
-        this.el.id = 'khanwareSplash';
-        this.el.style.cssText = `
-            position: fixed;
-            top:0; left:0;
-            width:100%; height:100%;
-            display:flex; align-items:center; justify-content:center;
-            background-color:#000; color:white;
-            font-family:MuseoSans,sans-serif; font-size:30px;
-            opacity:0; transition:opacity 0.5s ease; z-index:9999;
-            user-select:none; text-align:center;
-        `;
-        this.el.innerHTML = '<span style="color:white;">KHANWARE</span><span style="color:#72ff72;">.SPACE</span>';
-        document.body.appendChild(this.el);
-        setTimeout(() => this.el.style.opacity = '1', 10);
-    }
-    hide() {
-        this.el.style.opacity = '0';
-        setTimeout(() => this.el.remove(), 1000);
-    }
-}
+  /* ---------- Estado / utilitários ---------- */
+  const loadedPlugins = [];
+  const _log = (...args) => console.log('[Khanware]', ...args);
+  const _warn = (...args) => console.warn('[Khanware]', ...args);
+  const _err = (...args) => console.error('[Khanware]', ...args);
 
-/* ----------------------------- Utilities ----------------------------- */
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const playAudio = url => { const audio = new Audio(url); audio.play(); };
-const sendToast = (text, duration = 5000) => {
-    Toastify({ text, duration, gravity: 'bottom', position: 'center', stopOnFocus:true, style:{background:'#000'} }).showToast();
-};
-const findAndClick = selector => { const el = document.querySelector(selector); if(el){ el.click(); sendToast(`⭕ Pressionando ${selector}`, 1000); } };
+  /* ---------- Helper: aguarda DOM pronto se necessário ---------- */
+  const whenReady = () => new Promise(resolve => {
+    if (document.readyState === 'complete' || document.readyState === 'interactive') return resolve();
+    document.addEventListener('DOMContentLoaded', () => resolve(), { once: true });
+  });
 
-/* ----------------------------- Event Emitter ----------------------------- */
-class EventEmitter{
-    constructor(){ this.events = {} }
-    on(t,e){ (Array.isArray(t)?t:[t]).forEach(k=>{ this.events[k]||(this.events[k]=[]); this.events[k].push(e); }) }
-    off(t,e){ (Array.isArray(t)?t:[t]).forEach(k=>{ this.events[k]&&(this.events[k]=this.events[k].filter(f=>f!==e)) }) }
-    emit(t,...args){ this.events[t] && this.events[t].forEach(f=>f(...args)) }
-    once(t,e){ const f=(...args)=>{ e(...args); this.off(t,f); }; this.on(t,f) }
-}
-const plppdo = new EventEmitter();
-new MutationObserver(()=> plppdo.emit('domChanged')).observe(document.body, {childList:true, subtree:true});
+  /* ---------- Element(s) ---------- */
+  let splashScreen = null;
 
-/* ----------------------------- Plugin Loader ----------------------------- */
-async function loadScript(url, label) {
+  /* ---------- Styles / Font / Favicon (seguro) ---------- */
+  async function applyMiscStyles() {
+    await whenReady();
+
     try {
-        const module = await import(url);
-        loadedPlugins.push(label);
-        return module;
-    } catch(e) { console.error(`Failed to load plugin ${label}`, e); }
-}
-async function loadCss(url){
-    return new Promise(resolve => {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet'; link.href = url;
-        link.onload = () => resolve();
-        document.head.appendChild(link);
-    });
-}
+      const fontCss = "@font-face{font-family:'MuseoSans';src:url('https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf') format('truetype');}";
+      const s1 = document.createElement('style');
+      s1.innerHTML = fontCss;
+      document.head.appendChild(s1);
+    } catch (e) { _warn('Falha ao aplicar font-face', e); }
 
-/* ----------------------------- Spoof Modules ----------------------------- */
-class QuestionSpoof {
-    constructor() {
-        this.phrases = [
-            "🔥 Get good, get [Khanware](https://github.com/Niximkk/khanware/)!",
-            "🤍 Made by [@im.nix](https://e-z.bio/sounix).",
-            "☄️ By [Niximkk/khanware](https://github.com/Niximkk/khanware/).",
+    try {
+      const scrollbar = "::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #f1f1f1; } ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #555; }";
+      const s2 = document.createElement('style');
+      s2.innerHTML = scrollbar;
+      document.head.appendChild(s2);
+    } catch (e) { _warn('Falha ao aplicar scrollbar CSS', e); }
+
+    try {
+      const ico = document.querySelector("link[rel~='icon']");
+      if (ico) ico.href = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png';
+    } catch (e) { /* não crítico */ }
+  }
+
+  /* ---------- EventEmitter ---------- */
+  class EventEmitter {
+    constructor(){ this.events = {}; }
+    on(names, fn){ (Array.isArray(names)?names:[names]).forEach(n => { this.events[n] = this.events[n] || []; this.events[n].push(fn); }); }
+    off(names, fn){ (Array.isArray(names)?names:[names]).forEach(n => { if (!this.events[n]) return; this.events[n] = this.events[n].filter(x => x !== fn); }); }
+    emit(name, ...args){ (this.events[name]||[]).forEach(fn => { try { fn(...args); } catch(e){ _warn('Event handler error', e); } }); }
+    once(name, fn){ const wrapper = (...a) => { fn(...a); this.off(name, wrapper); }; this.on(name, wrapper); }
+  }
+  const plppdo = new EventEmitter();
+
+  /* Mutation observer que emite 'domChanged' quando o body muda */
+  (function initDomObserver(){
+    const attach = () => {
+      try {
+        new MutationObserver((mutationsList) => { for (let m of mutationsList) if (m.type === 'childList') plppdo.emit('domChanged', m); })
+          .observe(document.body, { childList: true, subtree: true });
+      } catch (e) { _warn('Erro ao inicializar MutationObserver', e); }
+    };
+    if (document.body) attach(); else document.addEventListener('DOMContentLoaded', attach, { once: true });
+  })();
+
+  /* ---------- Misc Functions ---------- */
+  const delay = ms => new Promise(res => setTimeout(res, ms));
+
+  // pré-carrega áudio e retorna função play
+  function createAudioPlayer(url){
+    try {
+      const audio = new Audio(url);
+      audio.preload = 'auto';
+      return () => { try { audio.currentTime = 0; audio.play().catch(()=>{}); } catch(e){} };
+    } catch(e){
+      return () => {};
+    }
+  }
+
+  const playAudio = (url) => { createAudioPlayer(url)(); };
+
+  const findAndClickBySelector = selector => {
+    try {
+      const el = document.querySelector(selector);
+      if (el) { el.click(); sendToast(`⭕ Pressionando ${selector}...`, 1000); return true; }
+    } catch (e) { _warn('findAndClick error', e); }
+    return false;
+  };
+
+  // sendToast: tenta usar Toastify; se não tiver, usa console/alert fallback
+  function sendToast(text, duration=5000, gravity='bottom') {
+    try {
+      if (typeof Toastify !== 'undefined') {
+        Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
+      } else {
+        // fallback não intrusivo
+        console.log('[ToastFallback]', text);
+      }
+    } catch (e) {
+      console.log('[ToastFallback]', text);
+    }
+  }
+
+  /* ---------- Splash Screen ---------- */
+  async function showSplashScreen() {
+    await whenReady();
+    try {
+      splashScreen = document.createElement('div');
+      splashScreen.id = 'khanwareSplash';
+      splashScreen.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background-color:#000;display:flex;align-items:center;justify-content:center;z-index:99999;opacity:0;transition:opacity 0.5s ease;user-select:none;color:white;font-family:MuseoSans,sans-serif;font-size:30px;text-align:center;";
+      splashScreen.innerHTML = '<span style="color:white;">KHANWARE</span><span style="color:#72ff72;">.SPACE</span>';
+      document.documentElement.appendChild(splashScreen);
+      // allow paint
+      requestAnimationFrame(() => { splashScreen.style.opacity = '1'; });
+    } catch (e) { _warn('showSplashScreen failed', e); }
+  }
+
+  async function hideSplashScreen() {
+    try {
+      if (!splashScreen) return;
+      splashScreen.style.opacity = '0';
+      setTimeout(() => { try { splashScreen.remove(); } catch(e){} }, 600);
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ---------- Loader seguro para scripts e css ---------- */
+  function loadCss(url){
+    return new Promise((resolve, reject) => {
+      try {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = url;
+        link.onload = () => resolve();
+        link.onerror = (e) => reject(e);
+        document.head.appendChild(link);
+      } catch (e) { reject(e); }
+    });
+  }
+
+  function loadScriptTag(url, opts = {}) {
+    return new Promise((resolve, reject) => {
+      try {
+        const s = document.createElement('script');
+        if (opts.type) s.type = opts.type;
+        s.src = url;
+        s.onload = () => { loadedPlugins.push(url); resolve(); };
+        s.onerror = (e) => reject(e);
+        (document.head || document.documentElement).appendChild(s);
+      } catch (e) { reject(e); }
+    });
+  }
+
+  /* ---------- FetchInterceptor (centraliza intervenções no fetch) ---------- */
+  class FetchInterceptor {
+    constructor(){
+      this.requestHandlers = []; // handlers: async (input, init) => { return {input, init} or null }
+      this.responseHandlers = []; // handlers: async (response, input, init) => { return Response or null }
+      this._install();
+    }
+    registerRequest(fn){ this.requestHandlers.push(fn); }
+    registerResponse(fn){ this.responseHandlers.push(fn); }
+    _install(){
+      if (this._installed) return;
+      const originalFetch = window.fetch.bind(window);
+      const self = this;
+      window.fetch = async function(input, init){
+        try {
+          // Normalize input/init
+          let normInput = input;
+          let normInit = init || {};
+
+          // If Request object passed, clone it to read body and allow rewriting by handlers
+          if (normInput instanceof Request) {
+            // create copies
+            const tempReq = normInput.clone();
+            const bodyText = await (tempReq.text().catch(()=>null));
+            normInit = Object.assign({}, normInit, {
+              method: tempReq.method,
+              headers: tempReq.headers,
+              body: bodyText ? bodyText : normInit.body
+            });
+            normInput = tempReq.url;
+          }
+
+          // Run request handlers sequentially
+          for (const h of self.requestHandlers) {
+            try {
+              const out = await h(normInput, normInit) || {};
+              if (out.input) normInput = out.input;
+              if (out.init) normInit = out.init;
+            } catch (e) {
+              _warn('request handler error', e);
+            }
+          }
+
+          // perform actual fetch
+          const response = await originalFetch(normInput, normInit);
+
+          // Clone response for handlers
+          for (const rh of self.responseHandlers) {
+            try {
+              const maybe = await rh(response.clone(), normInput, normInit);
+              if (maybe instanceof Response) {
+                // If handler returned a Response, use it
+                return maybe;
+              }
+            } catch (e) {
+              _warn('response handler error', e);
+            }
+          }
+
+          return response;
+        } catch (e) {
+          _err('fetch interceptor error', e);
+          // fallback to original fetch
+          return originalFetch(input, init);
+        }
+      };
+      this._installed = true;
+      _log('FetchInterceptor installed');
+    }
+  }
+  const fetchInterceptor = new FetchInterceptor();
+
+  /* ---------- Main modules (registram handlers no interceptor) ---------- */
+  function registerQuestionSpoof(){
+    const phrases = [ 
+      "🔥 Get good, get [Khanware](https://github.com/Niximkk/khanware/)!",
+      "🤍 Made by [@im.nix](https://e-z.bio/sounix).",
+      "☄️ By [Niximkk/khanware](https://github.com/Niximkk/khanware/).",
+      "🌟 Star the project on [GitHub](https://github.com/Niximkk/khanware/)!",
+      "🪶 Lite mode @ KhanwareMinimal.js",
+    ];
+
+    // response handler: modifica respostas de questões
+    fetchInterceptor.registerResponse(async (resp, input, init) => {
+      try {
+        // tentamos só para respostas com JSON
+        const ct = resp.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) return null;
+        const text = await resp.text();
+        let obj;
+        try { obj = JSON.parse(text); } catch (e) { return null; }
+        if (obj?.data?.assessmentItem?.item?.itemData) {
+          let itemData;
+          try { itemData = JSON.parse(obj.data.assessmentItem.item.itemData); } catch (e) { return null; }
+          // Verifica conteúdo e aplica spoof (mesma lógica original, porém mais defensiva)
+          if (Array.isArray(itemData.question?.content) && typeof itemData.question.content[0] === 'string') {
+            // regra original: se todo upperCase?
+            try {
+              const first = itemData.question.content[0];
+              if (first && first === first.toUpperCase()) {
+                itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false };
+                itemData.question.content = (phrases[Math.floor(Math.random() * phrases.length)] + `[[☃ radio 1]]`);
+                itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [ { content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false } ] } } };
+                obj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+                const newBody = JSON.stringify(obj);
+                sendToast("🔓 Questão exploitada.", 1000);
+                // build new response and copy headers/status
+                const headers = new Headers(resp.headers);
+                return new Response(newBody, { status: resp.status, statusText: resp.statusText, headers });
+              }
+            } catch (e) { /* ignore */ }
+          }
+        }
+      } catch (e) { _warn('questionSpoof error', e); }
+      return null;
+    });
+    _log('QuestionSpoof registered');
+  }
+
+  function registerVideoSpoof(){
+    // request handler: intercepta requests que atualizam progresso de vídeo e modifica body
+    fetchInterceptor.registerRequest(async (input, init) => {
+      try {
+        // init.body pode ser objeto/string
+        let body = init && init.body ? init.body : null;
+        if (!body && typeof input === 'string' && input.includes('graphql')) {
+          // nada a fazer
+          return null;
+        }
+        if (body && typeof body === 'string' && body.includes('"operationName":"updateUserVideoProgress"')) {
+          try {
+            const parsed = JSON.parse(body);
+            if (parsed?.variables?.input) {
+              const duration = parsed.variables.input.durationSeconds;
+              parsed.variables.input.secondsWatched = duration;
+              parsed.variables.input.lastSecondWatched = duration;
+              const newBody = JSON.stringify(parsed);
+              init = Object.assign({}, init, { body: newBody });
+              sendToast("🔓 Vídeo exploitado.", 1000);
+              return { input, init };
+            }
+          } catch (e) { _warn('videoSpoof parse error', e); }
+        }
+      } catch (e) { _warn('videoSpoof error', e); }
+      return null;
+    });
+    _log('VideoSpoof registered');
+  }
+
+  function registerMinuteFarm(){
+    // request handler: bloqueia "termination_event" em mark_conversions
+    fetchInterceptor.registerRequest(async (input, init) => {
+      try {
+        const urlStr = (typeof input === 'string') ? input : (input && input.url) || '';
+        let body = init && init.body ? init.body : null;
+        if (body && typeof body !== 'string') {
+          try { body = JSON.stringify(body); } catch(e) {}
+        }
+        if (urlStr.includes('mark_conversions') && body && body.includes('termination_event')) {
+          sendToast("🚫 Limitador de tempo bloqueado.", 1000);
+          // retorna um fake response by throwing or by short-circuit fetch with a rejected promise
+          // melhor: retornar a mesma requisição mas com body modificado para remover termination_event
+          const newBody = body.replace(/termination_event/g, ''); // tentativa simples de remoção
+          init = Object.assign({}, init, { body: newBody });
+          return { input, init };
+        }
+      } catch (e) { _warn('minuteFarm error', e); }
+      return null;
+    });
+    _log('MinuteFarm registered');
+  }
+
+  /* ---------- AutoAnswer: observa DOM e tenta clicar em elementos relevantes ---------- */
+  function initAutoAnswer(){
+    let running = true;
+    const baseSelectors = [
+      `[data-testid="choice-icon__library-choice-icon"]`,
+      `[data-testid="exercise-check-answer"]`,
+      `[data-testid="exercise-next-question"]`,
+      `._1udzurba`,
+      `._awve9b`
+    ];
+
+    // throttle helper
+    function throttle(fn, ms){
+      let last = 0;
+      return (...args) => {
+        const now = Date.now();
+        if (now - last > ms) { last = now; fn(...args); }
+      };
+    }
+
+    const tryClickAll = () => {
+      for (const sel of baseSelectors) {
+        try {
+          findAndClickBySelector(sel);
+          const maybe = document.querySelector(sel + '> div');
+          if (maybe && maybe.innerText === 'Mostrar resumo') {
+            sendToast("🎉 Exercício concluído!", 3000);
+            playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav');
+          }
+        } catch (e) {}
+      }
+    };
+
+    // observe DOM changes and try clicking (throttled)
+    const observer = new MutationObserver(throttle(() => {
+      if (!running) return;
+      tryClickAll();
+    }, 700));
+
+    const attach = () => {
+      try {
+        observer.observe(document.body, { childList: true, subtree: true });
+      } catch (e) { _warn('AutoAnswer observer attach fail', e); }
+    };
+
+    if (document.body) attach(); else document.addEventListener('DOMContentLoaded', attach, { once: true });
+
+    // também tenta periodicamente (fallback)
+    const intervalId = setInterval(() => { if (!running) { clearInterval(intervalId); return; } tryClickAll(); }, 1200);
+
+    _log('AutoAnswer initialized');
+    return { stop: () => { running = false; try { observer.disconnect(); } catch(e){} clearInterval(intervalId); } };
+  }
+
+  /* ---------- Inicialização principal (carrega libs e ativa módulos) ---------- */
+  async function setupMain() {
+    try {
+      await applyMiscStyles();
+      await showSplashScreen();
+
+      // Carregar CSS/JS externos de forma segura
+      try {
+        await loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css');
+      } catch (e) { _warn('Falha ao carregar Toastify CSS', e); }
+
+      try {
+        await loadScriptTag('https://cdn.jsdelivr.net/npm/toastify-js'); // adiciona Toastify globalmente
+      } catch (e) { _warn('Falha ao carregar Toastify', e); }
+
+      try {
+        await loadScriptTag('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js');
+        if (typeof DarkReader !== 'undefined' && DarkReader.setFetchMethod) {
+          try { DarkReader.setFetchMethod(window.fetch); DarkReader.enable(); } catch (e) { _warn('DarkReader init fail', e); }
+        }
+      } catch (e) { _warn('Falha ao carregar DarkReader', e); }
+
+      // Registra módulos no interceptor
+      registerQuestionSpoof();
+      registerVideoSpoof();
+      registerMinuteFarm();
+
+      // Inicia AutoAnswer
+      const auto = initAutoAnswer();
+
+      // Mensagens e som de sucesso
+      sendToast("🪶 Khanware Minimal injetado com sucesso!", 3000);
+      playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+
+      // Esconde splashScreen depois de curto período
+      await delay(700);
+      hideSplashScreen();
+
+      _log('Setup completo');
+    } catch (e) {
+      _err('setupMain error', e);
+      hideSplashScreen();
+    }
+  }
+
+  /* ---------- Validação do domínio e injeção ---------- */
+  (async () => {
+    const urlOk = /^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/.test(window.location.href);
+    if (!urlOk) {
+      alert("❌ Khanware Failed to Inject!\n\nVocê precisa executar o Khanware no site do Khan Academy! (https://pt.khanacademy.org/)");
+      try { window.location.href = "https://pt.khanacademy.org/"; } catch(e){}
+      return;
+    }
+
+    // start
+    try {
+      await setupMain();
+    } catch (e) {
+      _err('injection failed', e);
+    }
+  })();
+
+})();            "☄️ By [Niximkk/khanware](https://github.com/Niximkk/khanware/).",
             "🌟 Star the project on [GitHub](https://github.com/Niximkk/khanware/)!",
             "🪶 Lite mode @ KhanwareEnhanced.js",
         ];
