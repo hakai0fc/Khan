@@ -1,5 +1,5 @@
 (function() {
-    'use strict'; // Modo estrito para evitar erros globais
+    'use strict';
 
     let loadedPlugins = [];
 
@@ -18,83 +18,119 @@
     if (existingFavicon) existingFavicon.href = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png';
 
     /* EventEmitter */
-    class EventEmitter {
-        constructor() { this.events = {}; }
-        on(t, e) { if (typeof t === 'string') t = [t]; t.forEach(t => { this.events[t] || (this.events[t] = []); this.events[t].push(e); }); }
-        off(t, e) { if (typeof t === 'string') t = [t]; t.forEach(t => { this.events[t] && (this.events[t] = this.events[t].filter(x => x !== e)); }); }
-        emit(t, ...e) { this.events[t] && this.events[t].forEach(fn => fn(...e)); }
-        once(t, e) { if (typeof t === 'string') t = [t]; let s = (...i) => { e(...i); this.off(t, s); }; this.on(t, s); }
-    }
-    const plppdo = new EventEmitter();
-    new MutationObserver((mutationsList) => {
-        for (let mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged');
+    function EventEmitter() { this.events = {}; }
+    EventEmitter.prototype.on = function(t, e) {
+        if (typeof t === 'string') t = [t];
+        t.forEach(function(t) {
+            if (!this.events[t]) this.events[t] = [];
+            this.events[t].push(e);
+        }.bind(this));
+    };
+    EventEmitter.prototype.off = function(t, e) {
+        if (typeof t === 'string') t = [t];
+        t.forEach(function(t) {
+            if (this.events[t]) {
+                this.events[t] = this.events[t].filter(function(x) { return x !== e; });
+            }
+        }.bind(this));
+    };
+    EventEmitter.prototype.emit = function(t) {
+        var args = Array.prototype.slice.call(arguments, 1);
+        if (this.events[t]) {
+            this.events[t].forEach(function(fn) { fn.apply(null, args); });
+        }
+    };
+    EventEmitter.prototype.once = function(t, e) {
+        if (typeof t === 'string') t = [t];
+        var self = this;
+        var s = function() {
+            e.apply(null, arguments);
+            self.off(t, s);
+        };
+        this.on(t, s);
+    };
+    var plppdo = new EventEmitter();
+    new MutationObserver(function(mutationsList) {
+        for (var i = 0; i < mutationsList.length; i++) {
+            var mutation = mutationsList[i];
+            if (mutation.type === 'childList') plppdo.emit('domChanged');
+        }
     }).observe(document.body, { childList: true, subtree: true });
 
-    /* Misc Functions */
-    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-    const playAudio = url => {
+    /* Misc Functions - Sem Await */
+    function delay(ms, callback) {
+        setTimeout(callback, ms);
+    }
+    function playAudio(url) {
         try {
-            const audio = new Audio(url);
-            audio.play().catch(e => {});
+            var audio = new Audio(url);
+            audio.play();
         } catch (e) {}
-    };
-    const findAndClickBySelector = selector => {
-        const element = document.querySelector(selector);
+    }
+    function findAndClickBySelector(selector) {
+        var element = document.querySelector(selector);
         if (element) {
             element.click();
-            sendToast(`⭕ Pressionando ${selector}...`, 1000);
+            sendToast('⭕ Pressionando ' + selector + '...', 1000);
             return true;
         }
         return false;
-    };
-    function sendToast(text, duration = 5000, gravity = 'bottom') {
+    }
+    function sendToast(text, duration, gravity) {
         if (typeof Toastify !== 'undefined') {
-            Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
+            Toastify({ text: text, duration: duration || 5000, gravity: gravity || 'bottom', position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast();
         } else {
-            alert(`[HAKAI]: ${text}`);
-            console.log(`[HAKAI]: ${text}`);
+            alert('[HAKAI]: ' + text);
+            if (console && console.log) console.log('[HAKAI]: ' + text);
         }
     }
 
-    async function showSplashScreen() {
+    function showSplashScreen() {
         splashScreen.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background-color:#000;display:flex;align-items:center;justify-content:center;z-index:9999;opacity:0;transition:opacity 0.5s ease;user-select:none;color:white;font-family:MuseoSans,sans-serif;font-size:30px;text-align:center;";
         splashScreen.innerHTML = '<span style="color:white;">HAKAI</span><span style="color:#ff7272;">.SPACE</span>';
         document.body.appendChild(splashScreen);
-        setTimeout(() => splashScreen.style.opacity = '1', 10);
+        setTimeout(function() { splashScreen.style.opacity = '1'; }, 10);
     }
-    async function hideSplashScreen() {
+    function hideSplashScreen() {
         splashScreen.style.opacity = '0';
-        setTimeout(() => splashScreen.remove(), 1000);
+        setTimeout(function() { splashScreen.remove(); }, 1000);
     }
 
-    async function loadScript(url, label) {
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const script = await response.text();
-            loadedPlugins.push(label);
-            eval(script);
-            return true;
-        } catch (e) {
-            console.error(`[HAKAI] Failed to load ${label}:`, e);
-            return false;
-        }
+    function loadScript(url, label, callback) {
+        var xhr = new XMLHttpRequest(); // Usa XHR para compatibilidade mobile (evita fetch issues)
+        xhr.open('GET', url, true);
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    loadedPlugins.push(label);
+                    try {
+                        eval(xhr.responseText);
+                        if (callback) callback(true);
+                    } catch (e) {
+                        if (console && console.error) console.error('[HAKAI] Eval error in ' + label + ':', e);
+                        if (callback) callback(false);
+                    }
+                } else {
+                    if (console && console.error) console.error('[HAKAI] Failed to load ' + label + ': HTTP ' + xhr.status);
+                    if (callback) callback(false);
+                }
+            }
+        };
+        xhr.send();
     }
-    async function loadCss(url) {
-        return new Promise(resolve => {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.type = 'text/css';
-            link.href = url;
-            link.onload = () => resolve(true);
-            link.onerror = () => resolve(false);
-            document.head.appendChild(link);
-        });
+    function loadCss(url, callback) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = url;
+        link.onload = function() { if (callback) callback(true); };
+        link.onerror = function() { if (callback) callback(false); };
+        document.head.appendChild(link);
     }
 
-    /* Main Functions */
+    /* Main Functions - Fetch sem Await (usa .then) */
     function setupMain() {
-        const phrases = [
+        var phrases = [
             "🔥 Get good, get HAKAI!",
             "🤍 Made by @hakai0fc",
             "☄️ By Hakai0fc/Khan.",
@@ -102,58 +138,68 @@
             "🪶 Lite mode @ HakaiMinimal.js",
         ];
 
-        // ÚNICA interceptação de fetch
-        const originalFetch = window.fetch;
-        window.fetch = async function(input, init = {}) {
-            let body = null;
-            if (input instanceof Request) {
-                body = await input.clone().text();
-            } else if (init.body) {
+        var originalFetch = window.fetch;
+        window.fetch = function(input, init) {
+            var body = null;
+            var isRequest = input instanceof Request;
+            if (isRequest) {
+                // Para Request, clone e leia body async
+                return input.clone().text().then(function(bodyText) {
+                    body = bodyText;
+                    return processBodyAndFetch(body, input, init, originalFetch, phrases);
+                }).catch(function() {
+                    return originalFetch.apply(this, arguments);
+                });
+            } else if (init && init.body) {
                 body = typeof init.body === 'string' ? init.body : new TextDecoder().decode(init.body);
+                return processBodyAndFetch(body, input, init, originalFetch, phrases);
             }
+            return originalFetch.apply(this, arguments);
+        };
 
-            const args = arguments;
+        function processBodyAndFetch(body, input, init, originalFetch, phrases) {
+            var args = arguments;
 
             // QuestionSpoof
             if (body && body.includes('assessmentItem')) {
-                try {
-                    const response = await originalFetch.apply(this, args);
-                    const clonedResponse = response.clone();
-                    const responseBody = await clonedResponse.text();
-                    let responseObj;
-                    try {
-                        responseObj = JSON.parse(responseBody);
-                    } catch {}
-                    if (responseObj?.data?.assessmentItem?.item?.itemData) {
-                        let itemData;
+                return originalFetch.apply(this, [input, init]).then(function(response) {
+                    return response.clone().text().then(function(responseBody) {
+                        var responseObj;
                         try {
-                            itemData = JSON.parse(responseObj.data.assessmentItem.item.itemData);
-                        } catch {}
-                        if (itemData && itemData.question && itemData.question.content[0] === itemData.question.content[0].toUpperCase()) {
-                            itemData.answerArea = { calculator: false, chi2Table: false, periodicTable: false, tTable: false, zTable: false };
-                            itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + `[[☃ radio 1]]`;
-                            itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [{ content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false }] } } };
-                            responseObj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
-                            sendToast("🔓 Questão exploitada.", 1000);
-                            return new Response(JSON.stringify(responseObj), { status: response.status, statusText: response.statusText, headers: response.headers });
+                            responseObj = JSON.parse(responseBody);
+                        } catch (e) {}
+                        if (responseObj && responseObj.data && responseObj.data.assessmentItem && responseObj.data.assessmentItem.item && responseObj.data.assessmentItem.item.itemData) {
+                            var itemData;
+                            try {
+                                itemData = JSON.parse(responseObj.data.assessmentItem.item.itemData);
+                            } catch (e) {}
+                            if (itemData && itemData.question && itemData.question.content && itemData.question.content[0] === itemData.question.content[0].toUpperCase()) {
+                                itemData.answerArea = { calculator: false, chi2Table: false, periodicTable: false, tTable: false, zTable: false };
+                                itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + '[[☃ radio 1]]';
+                                itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [{ content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false }] } } };
+                                responseObj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+                                sendToast("🔓 Questão exploitada.", 1000);
+                                return new Response(JSON.stringify(responseObj), { status: response.status, statusText: response.statusText, headers: response.headers });
+                            }
                         }
-                    }
-                    return response;
-                } catch (e) {
-                    console.debug('QuestionSpoof error:', e);
-                }
+                        return response;
+                    });
+                }).catch(function(e) {
+                    if (console && console.debug) console.debug('QuestionSpoof error:', e);
+                    return originalFetch.apply(this, [input, init]);
+                });
             }
 
             // VideoSpoof
-            if (body && body.includes('updateUser VideoProgress')) {  // Corrigi o nome da operação (era "VideoProgress" sem espaço)
+            if (body && body.includes('updateUser VideoProgress')) {  // Nome correto da operação
                 try {
-                    let bodyObj = JSON.parse(body);
+                    var bodyObj = JSON.parse(body);
                     if (bodyObj.variables && bodyObj.variables.input) {
-                        const durationSeconds = bodyObj.variables.input.durationSeconds;
+                        var durationSeconds = bodyObj.variables.input.durationSeconds;
                         bodyObj.variables.input.secondsWatched = durationSeconds;
                         bodyObj.variables.input.lastSecondWatched = durationSeconds;
-                        const newBody = JSON.stringify(bodyObj);
-                        if (input instanceof Request) {
+                        var newBody = JSON.stringify(bodyObj);
+                        if (isRequest) {
                             input = new Request(input, { body: newBody });
                         } else {
                             init.body = newBody;
@@ -161,7 +207,7 @@
                         sendToast("🔓 Vídeo exploitado.", 1000);
                     }
                 } catch (e) {
-                    console.debug('VideoSpoof error:', e);
+                    if (console && console.debug) console.debug('VideoSpoof error:', e);
                 }
             }
 
@@ -170,45 +216,99 @@
                 try {
                     if (body.includes("termination_event")) {
                         sendToast("🚫 Limitador de tempo bloqueado.", 1000);
-                        return new Response(null, { status: 200 });  // Isso está dentro da função, ok
+                        return new Promise(function(resolve) { resolve(new Response(null, { status: 200 })); });
                     }
                 } catch (e) {
-                    console.debug('MinuteFarm error:', e);
+                    if (console && console.debug) console.debug('MinuteFarm error:', e);
                 }
             }
 
-            return originalFetch.apply(this, args);
-        };
+            return originalFetch.apply(this, [input, init]);
+        }
 
         // AutoAnswer
-        const baseSelectors = [
-            `[data-testid="choice-icon__library-choice-icon"]`,
-            `[data-testid="exercise-check-answer"]`,
-            `[data-testid="exercise-next-question"]`,
-            `._1udzurba`,
-            `._awve9b`,
-            `button[data-testid="kaButton"]:not([disabled])`,
-            `.ExerciseController button[role="button"]`,
-            `[data-testid="radio-choice"]`
+        var baseSelectors = [
+            '[data-testid="choice-icon__library-choice-icon"]',
+            '[data-testid="exercise-check-answer"]',
+            '[data-testid="exercise-next-question"]',
+            '._1udzurba',
+            '._awve9b',
+            'button[data-testid="kaButton"]:not([disabled])',
+            '.ExerciseController button[role="button"]',
+            '[data-testid="radio-choice"]'
         ];
 
-        let autoAnswerRunning = true;
-        plppdo.on('domChanged', () => {
-            if (!autoAnswerRunning) return;  // Isso está dentro da função on, ok
-            let clicked = false;
-            for (const q of baseSelectors) {
-                if (findAndClickBySelector(q)) clicked = true;
+        var autoAnswerRunning = true;
+        plppdo.on('domChanged', function() {
+            if (!autoAnswerRunning) return;
+            var clicked = false;
+            for (var i = 0; i < baseSelectors.length; i++) {
+                if (findAndClickBySelector(baseSelectors[i])) clicked = true;
             }
-            const summaryElement = document.querySelector('.ExerciseController-summary, [class*="summary"]');
+            var summaryElement = document.querySelector('.ExerciseController-summary, [class*="summary"]');
             if (summaryElement && summaryElement.innerText && summaryElement.innerText.includes("resumo")) {
                 sendToast("🎉 Exercício concluído!", 3000);
                 playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
                 autoAnswerRunning = false;
             }
-            if (clicked) console.log('[HAKAI] AutoAnswer clicou algo.');
+            if (clicked && console && console.log) console.log('[HAKAI] AutoAnswer clicou algo.');
         });
 
-        console.log('[HAKAI] SetupMain carregado!');
+        if (console && console.log) console.log('[HAKAI] SetupMain carregado!');
+    }
+
+    /* Inject Check */
+    var khanRegex = /^https?:\/\/([a-z0-9-]+\.)?(pt\.)?khanacademy\.org/;
+    if (!khanRegex.test(window.location.href)) {
+        alert("❌ HAKAI Failed to Inject!\nVocê precisa executar HAKAI no site do Khan Academy!");
+        window.location.href = "https://pt.khanacademy.org/";
+    } else {
+        showSplashScreen();
+
+        // Carrega dependências com callbacks (sem Promise.all para simplicidade)
+        var darkLoaded = false;
+        var toastLoaded = false;
+        loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin', function(success) {
+            if (success && typeof DarkReader !== 'undefined') {
+                try {
+                    DarkReader.setFetchMethod(window.fetch);
+                    DarkReader.enable();
+                } catch (e) {
+                    if (console && console.debug) console.debug('DarkReader falhou:', e);
+                }
+                darkLoaded = true;
+            }
+            checkAllLoaded();
+        });
+        loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css', function() {}); // CSS não precisa callback
+        loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin', function(success) {
+            toastLoaded = success;
+            checkAllLoaded();
+        });
+
+        function checkAllLoaded() {
+            if (darkLoaded !== false && toastLoaded !== false) {  // Espera ambos
+                sendToast("🪶 HAKAI Minimal injetado com sucesso!");
+                playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+                delay(500, function() {
+                    hideSplashScreen();
+                    setupMain();
+                });
+            }
+        }
+
+        // Fallback se loads falharem (roda após 5s)
+        setTimeout(function() {
+            if (darkLoaded === false || toastLoaded === false) {
+                if (console && console.error) console.error('[HAKAI] Dependências falharam, mas hacks ativados.');
+                alert('[HAKAI] Dependências falharam, mas hacks ativados.');
+                hideSplashScreen();
+                setupMain();
+            }
+        }, 5000);
+    }
+})();
+  console.log('[HAKAI] SetupMain carregado!');
     }
 
     /* Inject Check - SEM RETURN, só if/else */
