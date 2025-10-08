@@ -246,6 +246,32 @@ Promise.all([
     console.error('[HAKAI] Load error:', e);
     hideSplashScreen();
 });
+arkreader.min.js', 'darkReaderPlugin'),
+    loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css'),
+    loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin')
+]).then(async (results) => {
+    if (results[0]) { // DarkReader
+        try {
+            DarkReader.setFetchMethod(window.fetch);
+            DarkReader.enable();
+        } catch (e) {
+            console.error('DarkReader init failed:', e);
+        }
+    }
+    if (results[2]) { // Toastify
+        sendToast("🪶 HAKAI Minimal injetado com sucesso!");
+        playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
+    } else {
+        console.log('[HAKAI] Toastify failed, using console fallback.');
+    }
+    await delay(500);
+    hideSplashScreen();
+    setupMain();
+    // console.clear(); // Comentei para debug; descomente se quiser limpar
+}).catch(e => {
+    console.error('[HAKAI] Load error:', e);
+    hideSplashScreen();
+});
             try {
                 const responseBody = await clonedResponse.text();
                 let responseObj = JSON.parse(responseBody);
