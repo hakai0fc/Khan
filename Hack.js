@@ -153,7 +153,7 @@ function setupMain(){
                         playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
                     }
                 }
-                await delay(800);
+                await delay(785); // ajustado para 785ms
             }
         })();
     })();
@@ -161,7 +161,7 @@ function setupMain(){
 
 /* Inject */
 if (!/^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/.test(window.location.href)) { 
-    alert("❌ HakaiWare Failed to Injected!\n\nVocê precisa executar o HakaiWare no site do Khan Academy! (https://pt.khanacademy.org/)"); 
+    alert("❌ HakaiWare Failed to Inject!\n\nVocê precisa executar o HakaiWare no site do Khan Academy! (https://pt.khanacademy.org/)"); 
     window.location.href = "https://pt.khanacademy.org/"; 
 }
 
@@ -179,29 +179,7 @@ loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin')
     hideSplashScreen();
     setupMain();
     console.clear();
-});deSplashScreen();
-    setupMain();
-    
-    console.clear();
-});  (function installFetchWrapper(){
-    if (window.__hakaiware_fetch_installed) return;
-    window.__hakaiware_fetch_installed = true;
-    const orig = window.fetch.bind(window);
-    const reqProcs = [];
-    const resProcs = [];
-    window.__hakaiware_fetch_registerRequestProcessor = fn => reqProcs.push(fn);
-    window.__hakaiware_fetch_registerResponseProcessor = fn => resProcs.push(fn);
-
-    window.fetch = async function(input, init) {
-      try {
-        for (const p of reqProcs) { // none by default
-          try { const out = await p(input, init || {}); if (Array.isArray(out)) { input = out[0]; init = out[1] || init; } } catch(e){ console.error(e); }
-        }
-        const r = await orig(input, init);
-        for (const p of resProcs) {
-          try { const maybe = await p(r, input, init); if (maybe instanceof Response) return maybe; } catch(e){ console.error(e); }
-        }
-        return r;
+});
       } catch(e) { console.error('fetch wrapper error', e); return orig(input, init); }
     };
     window.__hakaiware_fetch_debug = { reqProcs, resProcs };
