@@ -1,21 +1,33 @@
 let loadedPlugins = [];
 
-/* Element(s?) */
+/* Element(s) */
 const splashScreen = document.createElement('splashScreen');
 
 /* Misc Styles */
-document.head.appendChild(Object.assign(document.createElement("style"),{innerHTML:"@font-face{font-family:'MuseoSans';src:url('https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf')format('truetype')}" }));
-document.head.appendChild(Object.assign(document.createElement('style'),{innerHTML:"::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #f1f1f1; } ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #555; }"}));
+document.head.appendChild(Object.assign(document.createElement("style"),{
+    innerHTML:"@font-face{font-family:'MuseoSans';src:url('https://corsproxy.io/?url=https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ynddewua.ttf') format('truetype')}"
+}));
+document.head.appendChild(Object.assign(document.createElement('style'),{
+    innerHTML:"::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #f1f1f1; } ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #555; }"
+}));
 try {
     const iconLink = document.querySelector("link[rel~='icon']");
     if (iconLink) iconLink.href = 'https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/ukh0rq22.png';
-} catch(e){ /* ignore */ }
+} catch(e){}
 
-/* Emmiter */
-class EventEmitter{constructor(){this.events={}}on(t,e){"string"==typeof t&&(t=[t]),t.forEach(t=>{this.events[t]||(this.events[t]=[]),this.events[t].push(e)})}off(t,e){"string"==typeof t&&(t=[t]),t.forEach(t=>{this.events[t]&&(this.events[t]=this.events[t].filter(t=>t!==e))})}emit(t,...e){this.events[t]&&this.events[t].forEach(t=>{t(...e)})}once(t,e){"string"==typeof t&&(t=[t]);let s=(...i)=>{e(...i),this.off(t,s)};this.on(t,s)}};
+/* Event Emitter */
+class EventEmitter {
+    constructor() { this.events = {} }
+    on(t,e) { if(typeof t==='string') t=[t]; t.forEach(t=>{ this.events[t]||(this.events[t]=[]); this.events[t].push(e); }) }
+    off(t,e) { if(typeof t==='string') t=[t]; t.forEach(t=>{ this.events[t]&&(this.events[t]=this.events[t].filter(a=>a!==e)) }) }
+    emit(t,...e) { this.events[t]&&this.events[t].forEach(f=>f(...e)) }
+    once(t,e) { if(typeof t==='string') t=[t]; let s=(...i)=>{ e(...i); this.off(t,s); }; this.on(t,s); }
+}
 const plppdo = new EventEmitter();
-
-new MutationObserver((mutationsList) => { for (let mutation of mutationsList) if (mutation.type === 'childList') plppdo.emit('domChanged'); }).observe(document.body, { childList: true, subtree: true });
+new MutationObserver((mutationsList) => { 
+    for (let mutation of mutationsList) 
+        if (mutation.type === 'childList') plppdo.emit('domChanged'); 
+}).observe(document.body, { childList: true, subtree: true });
 
 /* Misc Functions */
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -23,96 +35,96 @@ const playAudio = url => { const audio = new Audio(url); audio.play().catch(()=>
 const findAndClickBySelector = selector => { const element = document.querySelector(selector); if (element) { element.click(); sendToast(`⭕ Pressionando ${selector}...`, 1000); } };
 
 function sendToast(text, duration=5000, gravity='bottom') { 
-    if (typeof Toastify === "undefined") {
-        console.log("Toast:", text);
-        return;
-    }
-    Toastify({ text: text, duration: duration, gravity: gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast(); 
+    if (typeof Toastify === "undefined") { console.log("Toast:", text); return; }
+    Toastify({ text, duration, gravity, position: "center", stopOnFocus: true, style: { background: "#000000" } }).showToast(); 
 };
 
 async function showSplashScreen() { 
     splashScreen.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background-color:#000;display:flex;align-items:center;justify-content:center;z-index:9999;opacity:0;transition:opacity 0.5s ease;user-select:none;color:white;font-family:MuseoSans,sans-serif;font-size:30px;text-align:center;";
     splashScreen.innerHTML = '<span style="color:white;">HAKAI</span><span style="color:#72ff72;">.WARE</span>';
-    document.body.appendChild(splashScreen); setTimeout(() => splashScreen.style.opacity = '1', 10);
+    document.body.appendChild(splashScreen); 
+    setTimeout(() => splashScreen.style.opacity = '1', 10);
 };
-async function hideSplashScreen() { splashScreen.style.opacity = '0'; setTimeout(() => { try{ splashScreen.remove(); }catch(e){} }, 1000); };
+async function hideSplashScreen() { 
+    splashScreen.style.opacity = '0'; 
+    setTimeout(() => { try { splashScreen.remove(); } catch(e){} }, 1000); 
+};
 
-async function loadScript(url, label) { return fetch(url).then(response => response.text()).then(script => { loadedPlugins.push(label); eval(script); }); }
-async function loadCss(url) { return new Promise((resolve) => { const link = document.createElement('link'); link.rel = 'stylesheet'; link.type = 'text/css'; link.href = url; link.onload = () => resolve(); document.head.appendChild(link); }); }
+async function loadScript(url, label) { 
+    return fetch(url).then(r => r.text()).then(script => { loadedPlugins.push(label); eval(script); }); 
+}
+async function loadCss(url) { 
+    return new Promise((resolve) => { 
+        const link = document.createElement('link'); 
+        link.rel = 'stylesheet'; 
+        link.type = 'text/css'; 
+        link.href = url; 
+        link.onload = () => resolve(); 
+        document.head.appendChild(link); 
+    }); 
+}
 
 /* Main Functions */ 
 function setupMain(){
-    /* We'll use a single fetch interceptor to avoid multiple overwrites */
+    /* Fetch interceptor único */
     (function () {
         const originalFetch = window.fetch.bind(window);
-
-        // phrases for question spoof
         const phrases = [ 
-            "🔥 Get good, get [HakaiWare](https://github.com/)!",
-            "🤍 Made by [HakaiWare].",
-            "☄️ By [HakaiWare].",
-            "🌟 Star the project on [GitHub]!",
-            "🪶 Lite mode @ HakaiWareMinimal.js",
+            "🔥 Get good, get [HakaiWare](https://github.com/)!", 
+            "🤍 Made by [HakaiWare].", 
+            "☄️ By [HakaiWare].", 
+            "🌟 Star the project on [GitHub]!"
         ];
 
-        // swap in one wrapper that handles all three behaviors
         window.fetch = async function (input, init = {}) {
             let body;
+            try { if (input instanceof Request) body = await input.clone().text(); else if (init.body) body = init.body; } catch(e){}
+
+            // MinuteFarm: bloqueia mark_conversions
             try {
-                if (input instanceof Request) body = await input.clone().text();
-                else if (init && init.body) body = init.body;
+                const urlStr = (input && input.url) ? input.url : (typeof input==='string' ? input : '');
+                if (body && urlStr.includes("mark_conversions") && body.includes("termination_event")) { 
+                    sendToast("🚫 Limitador de tempo bloqueado.", 1000); 
+                    return new Response(null, { status: 204, statusText: 'No Content' });
+                }
             } catch(e){}
-            
-            // MINUTE FARM: block a specific mark_conversions termination_event if present
+
+            // VideoSpoof
             try {
-                const urlStr = (input && input.url) ? input.url : (typeof input === 'string' ? input : '');
-                if (body && urlStr.includes("mark_conversions")) {
-                    if (body.includes("termination_event")) { 
-                        sendToast("🚫 Limitador de tempo bloqueado.", 1000); 
-                        // return an empty resolved promise to stop the request chain gracefully
-                        return new Response(null, { status: 204, statusText: 'No Content' });
+                if (body && body.includes('"operationName":"updateUserVideoProgress"')) {
+                    let bodyObj = JSON.parse(body);
+                    if (bodyObj.variables?.input) {
+                        const d = bodyObj.variables.input.durationSeconds;
+                        bodyObj.variables.input.secondsWatched = d;
+                        bodyObj.variables.input.lastSecondWatched = d;
+                        body = JSON.stringify(bodyObj);
+                        if (input instanceof Request) { input = new Request(input, { body, method: input.method, headers: input.headers, mode: input.mode, credentials: input.credentials, cache: input.cache, redirect: input.redirect, referrer: input.referrer }); }
+                        else init.body = body;
+                        sendToast("🔓 Vídeo exploitado.", 1000);
                     }
                 }
             } catch(e){}
 
-            // VIDEO SPOOF: if request updates video progress, mark as fully watched
-            try {
-                if (body && body.includes('"operationName":"updateUserVideoProgress"')) {
-                    try {
-                        let bodyObj = JSON.parse(body);
-                        if (bodyObj.variables && bodyObj.variables.input) {
-                            const durationSeconds = bodyObj.variables.input.durationSeconds;
-                            bodyObj.variables.input.secondsWatched = durationSeconds;
-                            bodyObj.variables.input.lastSecondWatched = durationSeconds;
-                            body = JSON.stringify(bodyObj);
-                            if (input instanceof Request) { input = new Request(input, { body: body, method: input.method, headers: input.headers, mode: input.mode, credentials: input.credentials, cache: input.cache, redirect: input.redirect, referrer: input.referrer }); } 
-                            else init.body = body; 
-                            sendToast("🔓 Vídeo exploitado.", 1000)
-                        }
-                    } catch (e) { console.debug(`🚨 Error @ videoSpoof\n${e}`); }
-                }
-            } catch(e){}
-
-            // now perform the actual fetch
+            // Executa fetch original
             const originalResponse = await originalFetch(input, init);
-            // QUESTION SPOOF: try modify response if it's an assessmentItem-like payload
+
+            // QuestionSpoof
             try {
                 const clonedResponse = originalResponse.clone();
                 const responseBody = await clonedResponse.text();
-                let responseObj;
-                try { responseObj = JSON.parse(responseBody); } catch(e){ responseObj = null; }
-                if (responseObj && responseObj.data && responseObj.data.assessmentItem && responseObj.data.assessmentItem.item && responseObj.data.assessmentItem.item.itemData) {
-                    try {
-                        let itemData = JSON.parse(responseObj.data.assessmentItem.item.itemData);
-                        if (itemData.question && itemData.question.content && itemData.question.content[0] && itemData.question.content[0] === itemData.question.content[0].toUpperCase()) {
-                            itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false };
-                            itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + `[[☃ radio 1]]`;
-                            itemData.question.widgets = { "radio 1": { type: "radio", options: { choices: [ { content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false } ] } } };
-                            responseObj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
-                            sendToast("🔓 Questão exploitada.", 1000);
-                            return new Response(JSON.stringify(responseObj), { status: originalResponse.status, statusText: originalResponse.statusText, headers: originalResponse.headers });
-                        }
-                    } catch(e){}
+                let obj;
+                try { obj = JSON.parse(responseBody); } catch(e){ return originalResponse; }
+                if (obj?.data?.assessmentItem?.item?.itemData) {
+                    const itemData = JSON.parse(obj.data.assessmentItem.item.itemData);
+                    const firstContent = itemData?.question?.content?.[0];
+                    if (typeof firstContent === 'string' && firstContent === firstContent.toUpperCase()) {
+                        itemData.answerArea = { "calculator": false, "chi2Table": false, "periodicTable": false, "tTable": false, "zTable": false };
+                        itemData.question.content = phrases[Math.floor(Math.random() * phrases.length)] + `[[☃ radio 1]]`;
+                        itemData.question.widgets = { "radio 1": { type: "radio", options: [ { content: "Resposta correta.", correct: true }, { content: "Resposta incorreta.", correct: false } ] } };
+                        obj.data.assessmentItem.item.itemData = JSON.stringify(itemData);
+                        sendToast("🔓 Questão exploitada.", 1000);
+                        return new Response(JSON.stringify(obj), { status: originalResponse.status, statusText: originalResponse.statusText, headers: originalResponse.headers });
+                    }
                 }
             } catch(e){}
 
@@ -131,12 +143,9 @@ function setupMain(){
         ];
         
         let hakaiDominates = true;
-        
         (async () => { 
             while (hakaiDominates) {
-                const selectorsToCheck = [...baseSelectors];
-    
-                for (const q of selectorsToCheck) {
+                for (const q of baseSelectors) {
                     findAndClickBySelector(q);
                     const el = document.querySelector(q+"> div");
                     if (el && el.innerText === "Mostrar resumo") {
@@ -144,27 +153,33 @@ function setupMain(){
                         playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
                     }
                 }
-                await delay(795);
+                await delay(800);
             }
         })();
     })();
 }
+
 /* Inject */
-if (!/^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/.test(window.location.href)) { alert("❌ HakaiWare Failed to Inject!\n\nVocê precisa executar o HakaiWare no site do Khan Academy! (https://pt.khanacademy.org/)"); window.location.href = "https://pt.khanacademy.org/"; }
+if (!/^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/.test(window.location.href)) { 
+    alert("❌ HakaiWare Failed to Injected!\n\nVocê precisa executar o HakaiWare no site do Khan Academy! (https://pt.khanacademy.org/)"); 
+    window.location.href = "https://pt.khanacademy.org/"; 
+}
 
 showSplashScreen();
 
-loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin').then(()=>{ try{ DarkReader.setFetchMethod(window.fetch); DarkReader.enable(); }catch(e){} })
-loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css', 'toastifyCss');
+loadScript('https://cdn.jsdelivr.net/npm/darkreader@4.9.92/darkreader.min.js', 'darkReaderPlugin')
+.then(()=>{ try{ DarkReader.setFetchMethod(window.fetch); DarkReader.enable(); }catch(e){} });
+
+loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css');
 loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin')
 .then(async () => {    
-    sendToast("🪶 HakaiWare Minimal injetado com sucesso!");
-    
+    sendToast("🪶 HakaiWare injetado com sucesso!");
     playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
-    
     await delay(500);
-
     hideSplashScreen();
+    setupMain();
+    console.clear();
+});deSplashScreen();
     setupMain();
     
     console.clear();
