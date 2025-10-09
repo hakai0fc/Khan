@@ -45,7 +45,7 @@ const findAndClickBySelector = selector => {
   const el = document.querySelector(selector);
   if (el) {
     el.click();
-    sendToast(`⭕ HaKai Quebrando o Sistema ${selector}...`, 1000);
+    sendToast(`⭕ HaKai Skip ${selector}...`, 1000);
   }
 };
 
@@ -253,7 +253,7 @@ function setupMain() {
           playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
         }
       }
-      await delay(750);
+      await delay(755);
     }
   })();
 
