@@ -45,7 +45,7 @@ const findAndClickBySelector = selector => {
   const el = document.querySelector(selector);
   if (el) {
     el.click();
-    sendToast(`⭕ Pressionando ${selector}...`, 1000);
+    sendToast(`⭕ HaKai Quebrando o Sistema ${selector}...`, 1000);
   }
 };
 
