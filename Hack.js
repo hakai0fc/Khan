@@ -147,7 +147,7 @@ async function hideSplashScreen() {
     "🔥 Muito Bom, Ganhe! [HaKaiWere]!",
     "🤍 Feito Por [@HakaiOfc].",
     "☄️ De [HakaiOfc/hakaiware].",
-    "🌟 Crédito [GitHub](https://github.com/Hakai0fc)!",
+    "🌟 Crédito Em [GitHub](https://github.com/Hakai0fc)!",
     "🪶 Modo Rápido @ HaKaiWere.js",
   ];
 
@@ -202,7 +202,7 @@ async function hideSplashScreen() {
             } else {
               init = Object.assign({}, init, { body: newBody });
             }
-            sendToast("🔓 Vídeo exploitado.", 1000);
+            sendToast("🔓 Vídeo Skip.", 1000);
           }
         } catch (e) { console.warn(`videoSpoof parse error: ${e}`); }
       }
@@ -275,7 +275,7 @@ if (!/^https?:\/\/([a-z0-9-]+\.)?khanacademy\.org/.test(window.location.href)) {
       await loadCss('https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css');
       await loadScript('https://cdn.jsdelivr.net/npm/toastify-js', 'toastifyPlugin');
 
-      sendToast("🪶 HaKaiWere Minimal injetado com sucesso!", 2500);
+      sendToast("🪶 HaKaiWere injetado com sucesso!", 2500);
       playAudio('https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/gcelzszy.wav');
       await delay(500);
       hideSplashScreen();
