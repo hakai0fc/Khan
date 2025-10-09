@@ -1,5 +1,4 @@
 /* Hack.js — HaKaiWere Minimal (pronto para raw.githubusercontent.com) */
-/* Mantive nomes internos para compatibilidade; apenas strings visíveis foram trocadas para "HaKaiWere" */
 
 const loadedPlugins = [];
 const splashScreen = document.createElement('div');
