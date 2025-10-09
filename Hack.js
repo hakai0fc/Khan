@@ -145,11 +145,11 @@ async function hideSplashScreen() {
 /* QuestionSpoof */
 (function registerQuestionSpoof(){
   const phrases = [
-    "🔥 Get good, get [HaKaiWere]!",
-    "🤍 Made by [@HakaiOfc].",
-    "☄️ By [HakaiOfc/hakaiware].",
-    "🌟 Star the project on [GitHub](https://github.com/Hakai0fc)!",
-    "🪶 Lite mode @ HaKaiWere.js",
+    "🔥 Muito Bom, Ganhe! [HaKaiWere]!",
+    "🤍 Feito Por [@HakaiOfc].",
+    "☄️ De [HakaiOfc/hakaiware].",
+    "🌟 Crédito [GitHub](https://github.com/Hakai0fc)!",
+    "🪶 Modo Rápido @ HaKaiWere.js",
   ];
 
   window.__hakaiware_fetch_registerResponseProcessor(async (response, input, init) => {
@@ -253,7 +253,7 @@ function setupMain() {
           playAudio("https://r2.e-z.host/4d0a0bea-60f8-44d6-9e74-3032a64a9f32/4x5g14gj.wav");
         }
       }
-      await delay(785);
+      await delay(780);
     }
   })();
 
